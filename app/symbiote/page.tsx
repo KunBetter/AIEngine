@@ -6,12 +6,18 @@ import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { StatBar } from "@/components/ui/StatBar";
 import { StreamingText } from "@/components/ui/StreamingText";
 import { saveGame } from "@/lib/save-system";
+import { PixelEvent } from "@/components/ui/PixelEvent";
+import type { PixelEventData } from "@/components/ui/PixelEvent";
 
 export default function SymbiotePage() {
   const { state, sendAction, resetGame, isLoading, error } = useSymbiote();
   const [customInput, setCustomInput] = useState("");
+  const [pixelEvent, setPixelEvent] = useState<PixelEventData | null>(null);
   const sceneRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const prevLocRef = useRef("");
+  const prevInvLenRef = useRef(0);
+  const prevDescRef = useRef("");
 
   // 自动滚动到底部
   useEffect(() => {
@@ -26,6 +32,49 @@ export default function SymbiotePage() {
       saveGame("symbiote", 0, state as unknown as Record<string, unknown>, `自动 - 第${state.turn}轮`);
     }
   }, [state.turn]);
+
+  // Pixel event: Discovery (new location)
+  useEffect(() => {
+    if (state.currentLocation !== prevLocRef.current && prevLocRef.current !== "" && state.turn > 0) {
+      setPixelEvent({ type: "discovery" });
+    }
+    prevLocRef.current = state.currentLocation;
+  }, [state.currentLocation, state.turn]);
+
+  // Pixel event: Flashback
+  useEffect(() => {
+    if (state.flashbacks && state.flashbacks.length > 0) {
+      const last = state.flashbacks[state.flashbacks.length - 1];
+      if (last?.revealed) {
+        setPixelEvent({ type: "flashback" });
+      }
+    }
+  }, [state.flashbacks?.length]);
+
+  // Pixel event: Item get
+  useEffect(() => {
+    if (state.inventory.length > prevInvLenRef.current) {
+      setPixelEvent({ type: "item_get" });
+    }
+    prevInvLenRef.current = state.inventory.length;
+  }, [state.inventory.length]);
+
+  // Pixel event: Danger (threat words in scene description)
+  useEffect(() => {
+    const desc = state.sceneDescription;
+    const dangerWords = ["危险", "威胁", "辐射", "不稳定", "崩塌", "陷阱", "有毒", "裂缝", "异常"];
+    if (desc && desc !== prevDescRef.current && dangerWords.some(w => desc.includes(w))) {
+      setPixelEvent({ type: "danger" });
+    }
+    prevDescRef.current = desc;
+  }, [state.sceneDescription]);
+
+  // Pixel event: Ending
+  useEffect(() => {
+    if (state.ending) {
+      setPixelEvent({ type: "ending", duration: 4000 });
+    }
+  }, [state.ending]);
 
   const handleAction = (action: string) => {
     if (isLoading) return;
@@ -313,6 +362,7 @@ export default function SymbiotePage() {
       )}
         </>
       )}
+      {pixelEvent && <PixelEvent event={pixelEvent} onDone={() => setPixelEvent(null)} />}
     </div>
   );
 }
