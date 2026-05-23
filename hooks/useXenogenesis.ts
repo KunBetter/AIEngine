@@ -32,6 +32,13 @@ const SPECIES_EMOJIS: Record<string, string> = {
 let colorIdx = 0;
 let speciesCounter = 0;
 
+function generateSeed(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let seed = "";
+  for (let i = 0; i < 6; i++) seed += chars[Math.floor(Math.random() * chars.length)];
+  return seed;
+}
+
 function createInitialState(): XenogenesisState {
   colorIdx = 0;
   speciesCounter = 0;
@@ -42,7 +49,24 @@ function createInitialState(): XenogenesisState {
     epoch: 0,
     timeline: [],
     isSimulating: false,
+    disasters: [],
+    civilizations: [],
+    achievements: [],
+    seed: generateSeed(),
   };
+}
+
+function checkAchievements(state: XenogenesisState): string[] {
+  const newAch = [...state.achievements];
+  const alive = Object.values(state.species).filter(s => s.status !== "extinct");
+  const extinct = Object.values(state.species).filter(s => s.status === "extinct");
+
+  if (extinct.length >= 1 && !newAch.includes("first_extinction")) newAch.push("first_extinction");
+  if (state.epoch >= 10 && extinct.length === 0 && !newAch.includes("perfect_balance")) newAch.push("perfect_balance");
+  if (alive.length >= 6 && !newAch.includes("diverse_world")) newAch.push("diverse_world");
+  if (state.epoch >= 10 && !newAch.includes("ten_epochs")) newAch.push("ten_epochs");
+
+  return newAch;
 }
 
 function reducer(state: XenogenesisState, action: Action): XenogenesisState {
@@ -79,7 +103,31 @@ function reducer(state: XenogenesisState, action: Action): XenogenesisState {
         }
       }
 
-      return {
+      // Process disasters
+      const newDisasters = [...state.disasters];
+      if (r.newDisaster) {
+        newDisasters.push({ epoch: r.epoch, ...r.newDisaster });
+      }
+
+      // Process civilizations
+      const newCivilizations = [...state.civilizations];
+      if (r.civilizationUpdate) {
+        const existing = newCivilizations.find(c => c.speciesId === r.civilizationUpdate!.speciesId);
+        if (existing) {
+          existing.stage = r.civilizationUpdate.stage;
+          existing.history.push(r.civilizationUpdate.event);
+        } else {
+          newCivilizations.push({
+            speciesId: r.civilizationUpdate.speciesId,
+            speciesName: newSpecies[r.civilizationUpdate.speciesId]?.name || "未知",
+            stage: r.civilizationUpdate.stage,
+            epochAwakened: r.epoch,
+            history: [r.civilizationUpdate.event],
+          });
+        }
+      }
+
+      const nextState: XenogenesisState = {
         ...state,
         epoch: r.epoch || state.epoch + 1,
         environment: {
@@ -100,8 +148,15 @@ function reducer(state: XenogenesisState, action: Action): XenogenesisState {
             interactions: r.interactions,
           },
         ],
+        disasters: newDisasters,
+        civilizations: newCivilizations,
         isSimulating: false,
         error: undefined,
+      };
+
+      return {
+        ...nextState,
+        achievements: checkAchievements(nextState),
       };
     }
     case "ADD_SPECIES": {
