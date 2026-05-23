@@ -1,9 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useXenogenesis } from "@/hooks/useXenogenesis";
 import type { SpeciesTraits, SpeciesDef, XenogenesisState } from "@/lib/types";
 import { ACHIEVEMENTS } from "@/lib/types";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { StreamingText } from "@/components/ui/StreamingText";
+import { GameCard } from "@/components/ui/GameCard";
+import { saveGame } from "@/lib/save-system";
 
 const TRAIT_LABELS: Record<keyof SpeciesTraits, string> = {
   size: "体型",
@@ -47,6 +51,13 @@ export default function XenogenesisPage() {
   const extinctSpecies = Object.values(state.species).filter((s) => s.status === "extinct");
   const currentEpoch = state.timeline[state.timeline.length - 1];
 
+  // Auto-save every 3 epochs
+  useEffect(() => {
+    if (state.epoch > 0 && state.epoch % 3 === 0) {
+      saveGame("xenogenesis", 0, state as unknown as Record<string, unknown>, `纪元${state.epoch}`);
+    }
+  }, [state.epoch]);
+
   return (
     <div className="flex-1 flex flex-col p-4 max-w-6xl mx-auto w-full gap-4">
       {/* 顶部状态栏 */}
@@ -85,11 +96,7 @@ export default function XenogenesisPage() {
         </div>
       </div>
 
-      {error && (
-        <div className="text-sm text-red-400 bg-red-400/10 border border-red-400/30 rounded-lg p-3 text-center">
-          {error}
-        </div>
-      )}
+      <ErrorBanner message={error} />
 
       {/* 物种创建表单 */}
       {showCreator && (
@@ -175,74 +182,53 @@ export default function XenogenesisPage() {
             <p className="text-sm text-gray-600">还没有物种。点击"+ 创建物种"开始。</p>
           ) : (
             <div className="space-y-2">
-              {aliveSpecies.map((s) => (
-                <div
-                  key={s.id}
-                  className="p-3 rounded-lg border border-[#1a1a2e] hover:border-[#2a2a4a] transition-colors"
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-bold text-white">
-                      {s.emoji} {s.name}
-                    </span>
-                    <span className="text-xs text-gray-500">{s.population} 只</span>
-                  </div>
-                  <div className="text-xs text-gray-500 mb-2">{s.type}</div>
-                  <div className="flex flex-wrap gap-1">
-                    {(Object.keys(TRAIT_LABELS) as Array<keyof SpeciesTraits>).map(
-                      (key) =>
-                        s.traits[key] !== undefined && (
-                          <span
-                            key={key}
-                            className="text-[10px] px-1.5 py-0.5 rounded bg-[#1a1a2e] text-gray-400"
-                          >
+              {aliveSpecies.map((s) => {
+                const civ = state.civilizations.find(c => c.speciesId === s.id && c.stage !== "collapsed");
+                const collapsedCiv = state.civilizations.find(c => c.speciesId === s.id && c.stage === "collapsed");
+                const stageLabels: Record<string, string> = {
+                  tools: "🔧 工具时代", tribal: "🏘 部落时代", agriculture: "🌾 农业时代",
+                  industrial: "🏭 工业时代", information: "💻 信息时代", interstellar: "⭐ 星际文明",
+                };
+                return (
+                  <GameCard
+                    key={s.id}
+                    emoji={s.emoji}
+                    name={s.name}
+                    subtitle={s.type}
+                    meta={`${s.population} 只`}
+                  >
+                    <div className="flex flex-wrap gap-1">
+                      {(Object.keys(TRAIT_LABELS) as Array<keyof SpeciesTraits>).map((key) =>
+                        s.traits[key] !== undefined && key !== "specialAbility" ? (
+                          <span key={key} className="text-[10px] px-1.5 py-0.5 rounded bg-[#1a1a2e] text-gray-400">
                             {TRAIT_LABELS[key]}:{s.traits[key]}
                           </span>
-                        )
-                    )}
-                    {s.traits.specialAbility && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#64b5f6]/10 text-[#64b5f6]">
-                        {s.traits.specialAbility}
-                      </span>
-                    )}
-                  </div>
-                  <div
-                    className={`text-[10px] mt-1.5 ${
-                      s.status === "thriving"
-                        ? "text-green-400"
-                        : s.status === "declining"
-                        ? "text-yellow-400"
-                        : s.status === "endangered"
-                        ? "text-red-400"
-                        : "text-gray-500"
-                    }`}
-                  >
-                    {s.status === "thriving" && "📈 繁盛"}
-                    {s.status === "stable" && "➡ 稳定"}
-                    {s.status === "declining" && "📉 衰减"}
-                    {s.status === "endangered" && "⚠ 濒危"}
-                  </div>
-                  {/* 文明状态 */}
-                  {(() => {
-                    const civ = state.civilizations.find(c => c.speciesId === s.id && c.stage !== "collapsed");
-                    if (!civ) return null;
-                    const stageLabels: Record<string, string> = {
-                      tools: "🔧 工具时代", tribal: "🏘 部落时代", agriculture: "🌾 农业时代",
-                      industrial: "🏭 工业时代", information: "💻 信息时代", interstellar: "⭐ 星际文明",
-                    };
-                    const collapsedCiv = state.civilizations.find(c => c.speciesId === s.id && c.stage === "collapsed");
-                    return (
-                      <div className="mt-2 pt-2 border-t border-[#1a1a2e]">
-                        <span className="text-[10px] text-[#64b5f6]">
-                          {civ ? stageLabels[civ.stage] || civ.stage : ""}
+                        ) : null
+                      )}
+                      {s.traits.specialAbility && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#64b5f6]/10 text-[#64b5f6]">
+                          {s.traits.specialAbility}
                         </span>
-                        {collapsedCiv && (
-                          <span className="text-[10px] text-red-400 ml-2">💀 文明崩塌</span>
-                        )}
+                      )}
+                    </div>
+                    <div className={`text-[10px] mt-1.5 ${
+                      s.status === "thriving" ? "text-green-400" : s.status === "declining" ? "text-yellow-400" :
+                      s.status === "endangered" ? "text-red-400" : "text-gray-500"
+                    }`}>
+                      {s.status === "thriving" && "📈 繁盛"}
+                      {s.status === "stable" && "➡ 稳定"}
+                      {s.status === "declining" && "📉 衰减"}
+                      {s.status === "endangered" && "⚠ 濒危"}
+                    </div>
+                    {civ && (
+                      <div className="mt-2 pt-2 border-t border-[#1a1a2e]">
+                        <span className="text-[10px] text-[#64b5f6]">{stageLabels[civ.stage] || civ.stage}</span>
+                        {collapsedCiv && <span className="text-[10px] text-red-400 ml-2">💀 文明崩塌</span>}
                       </div>
-                    );
-                  })()}
-                </div>
-              ))}
+                    )}
+                  </GameCard>
+                );
+              })}
               {extinctSpecies.map((s) => (
                 <div key={s.id} className="p-3 rounded-lg border border-[#1a1a2e] opacity-40">
                   <span className="text-sm text-gray-500 line-through">

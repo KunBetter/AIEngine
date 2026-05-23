@@ -2,6 +2,9 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useButterfly } from "@/hooks/useButterfly";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { StreamingText } from "@/components/ui/StreamingText";
+import { saveGame } from "@/lib/save-system";
 
 const LOCATION_COORDS: Record<string, { x: number; y: number }> = {
   "钟楼": { x: 200, y: 45 },
@@ -36,6 +39,13 @@ export default function ButterflyPage() {
       chatRef.current.scrollTop = chatRef.current.scrollHeight;
     }
   }, [state.dialogueMessages]);
+
+  // Auto-save at loop end
+  useEffect(() => {
+    if (state.loopNumber > 0 && state.timeOfDay >= 24) {
+      saveGame("butterfly", 0, state as unknown as Record<string, unknown>, `循环${state.loopNumber}结束`);
+    }
+  }, [state.timeOfDay]);
 
   // Format time
   const timeLabel = `${state.timeOfDay}:00`;
@@ -109,11 +119,7 @@ export default function ButterflyPage() {
         </div>
       </div>
 
-      {error && (
-        <div className="text-sm text-red-400 bg-red-400/10 border border-red-400/30 rounded-lg p-3 text-center">
-          {error}
-        </div>
-      )}
+      <ErrorBanner message={error} />
 
       {/* 关键事件提示 */}
       <div className="bg-[#ff6b9d]/5 border border-[#ff6b9d]/20 rounded-lg p-3 text-sm text-[#ff6b9d]/80">
@@ -316,11 +322,7 @@ export default function ButterflyPage() {
                     {state.sceneResult}
                   </div>
                 )}
-                {isLoading && (
-                  <div className="text-[#ff6b9d]/50 text-xs">
-                    <span className="cursor-blink">思考中</span>
-                  </div>
-                )}
+                {isLoading && <StreamingText text="" isLoading={true} accent="#ff6b9d" emptyText="思考中" />}
               </div>
             )}
           </div>

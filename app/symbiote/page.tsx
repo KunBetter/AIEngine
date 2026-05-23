@@ -2,6 +2,10 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useSymbiote } from "@/hooks/useSymbiote";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { StatBar } from "@/components/ui/StatBar";
+import { StreamingText } from "@/components/ui/StreamingText";
+import { saveGame } from "@/lib/save-system";
 
 export default function SymbiotePage() {
   const { state, sendAction, resetGame, isLoading, error } = useSymbiote();
@@ -15,6 +19,13 @@ export default function SymbiotePage() {
       sceneRef.current.scrollTop = sceneRef.current.scrollHeight;
     }
   }, [state.sceneDescription, state.symbioteMessage]);
+
+  // Auto-save every 3 turns
+  useEffect(() => {
+    if (state.turn > 0 && state.turn % 3 === 0 && !state.ending) {
+      saveGame("symbiote", 0, state as unknown as Record<string, unknown>, `自动 - 第${state.turn}轮`);
+    }
+  }, [state.turn]);
 
   const handleAction = (action: string) => {
     if (isLoading) return;
@@ -81,24 +92,7 @@ export default function SymbiotePage() {
         <>
           {/* 顶部状态栏 */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500">信任度</span>
-            <div className="w-32 h-2 bg-[#1a1a2e] rounded-full overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all duration-700"
-                style={{
-                  width: `${state.trustMeter}%`,
-                  backgroundColor: trustColor,
-                  boxShadow: `0 0 8px ${trustColor}`,
-                }}
-              />
-            </div>
-            <span className="text-xs font-mono" style={{ color: trustColor }}>
-              {state.trustMeter}
-            </span>
-          </div>
-        </div>
+          <StatBar label="信任度" value={state.trustMeter} max={100} color={trustColor} />
 
         <div className="flex items-center gap-4 text-xs text-gray-500">
           <span>
@@ -133,11 +127,7 @@ export default function SymbiotePage() {
       )}
 
       {/* 错误提示 */}
-      {error && (
-        <div className="text-sm text-red-400 bg-red-400/10 border border-red-400/30 rounded-lg p-3 text-center">
-          {error}
-        </div>
-      )}
+      <ErrorBanner message={error} onRetry={() => sendAction("重试")} />
 
       {/* 主内容区 */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-0">
@@ -175,12 +165,7 @@ export default function SymbiotePage() {
           ) : (
             <div className="space-y-4">
               {/* 场景描述（流式渲染中会有闪烁光标的样式） */}
-              <div className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">
-                {state.sceneDescription || (
-                  <span className="text-gray-600 italic">等待ECHO-7处理环境数据...</span>
-                )}
-                {isLoading && <span className="cursor-blink" />}
-              </div>
+              <StreamingText text={state.sceneDescription} isLoading={isLoading} accent="#00ff88" emptyText="等待ECHO-7处理环境数据..." />
 
               {/* 可用物品和线索 */}
               {(state.inventory.length > 0 || state.discoveredClues.length > 0) && (
