@@ -118,6 +118,15 @@ export interface NPCState {
   dialogueToday: string;
   secretKnowledge: string;
   dejaVu?: string;
+  secret: string;
+  desire: string;
+}
+
+export interface Hypothesis {
+  id: string;
+  loopNumber: number;
+  content: string;
+  status: "pending" | "confirmed" | "rejected";
 }
 
 export interface ButterflyState {
@@ -135,6 +144,8 @@ export interface ButterflyState {
   gamePhase: "intro" | "investigating" | "breakthrough" | "resolved";
   activeDialogue: string | null;
   dialogueMessages: DialogueMessage[];
+  activeMystery: "tower" | "plague" | "invasion";
+  hypotheses: Hypothesis[];
   isLoading?: boolean;
   error?: string;
   sceneResult?: string;
