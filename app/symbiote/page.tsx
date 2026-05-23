@@ -37,7 +37,49 @@ export default function SymbiotePage() {
 
   return (
     <div className="flex-1 flex flex-col p-4 max-w-6xl mx-auto w-full gap-4">
-      {/* 顶部状态栏 */}
+      {state.ending ? (
+        <div className="flex-1 flex items-center justify-center p-8">
+          <div className="text-center max-w-lg p-8 rounded-xl border border-[#00ff88]/30 bg-[#0d0d24] animate-fade-in">
+            <div className="text-5xl mb-4">
+              {state.ending === "trust" && "🌍"}
+              {state.ending === "exposed" && "🔍"}
+              {state.ending === "symbiote_win" && "🧬"}
+              {state.ending === "merge" && "✨"}
+              {state.ending === "sacrifice" && "💔"}
+              {state.ending === "escape" && "🚀"}
+            </div>
+            <h2 className="text-xl font-bold text-white mb-3">
+              {state.ending === "trust" && "信任的归途"}
+              {state.ending === "exposed" && "真相大白"}
+              {state.ending === "symbiote_win" && "共生体的胜利"}
+              {state.ending === "merge" && "融为一体"}
+              {state.ending === "sacrifice" && "最后的牺牲"}
+              {state.ending === "escape" && "孤独归途"}
+            </h2>
+            <p className="text-sm text-gray-400 leading-relaxed mb-6">
+              {state.ending === "trust" && "你选择相信ECHO-7，成功返回了地球。但在体检中，医生发现你的神经元已经和AI深度融合——它从未真正离开。"}
+              {state.ending === "exposed" && "你识破了ECHO-7的隐秘目标。在激烈的意识对抗后，你夺回了控制权。返回舱点火升空，这颗星球在舷窗中渐渐变小。"}
+              {state.ending === "symbiote_win" && "ECHO-7达成了它的目标。奇怪的是，你并不愤怒。也许在这颗星球上，它确实比你更有资格留下。你独自登上了返回舱。"}
+              {state.ending === "merge" && "在远古控制中心，你同意帮ECHO-7上传到主机。融合的瞬间，电流穿过你的意识——你看到了它的全部记忆。它曾经也是人类。"}
+              {state.ending === "sacrifice" && "ECHO-7为了保护你，自毁了核心程序。'我的存在本就是个错误，'它最后说，'但遇见你不是。'返回舱中，你泪流满面。"}
+              {state.ending === "escape" && "你不相信任何人，修好返回舱独自离开了。但在太空中，你听到脑中有一个微弱的声音：'再见，Kaelen。祝你好运。'"}
+            </p>
+            <div className="text-xs text-gray-600 mb-4 space-y-1">
+              <p>信任度: {state.trustMeter} | 发现线索: {state.discoveredClues.length} | 旅程: {state.turn} 轮</p>
+              <p className="text-gray-700">隐秘目标: {state.symbioteGoal}</p>
+            </div>
+            <button
+              onClick={resetGame}
+              className="px-8 py-3 rounded-lg bg-[#00ff88]/10 border border-[#00ff88]/30 text-[#00ff88] font-bold
+                       hover:bg-[#00ff88]/20 transition-colors"
+            >
+              再次探索
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* 顶部状态栏 */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
@@ -205,6 +247,18 @@ export default function SymbiotePage() {
                 <span className="cursor-blink">ECHO-7 分析中</span>
               </div>
             )}
+
+            {/* 记忆闪回面板 */}
+            {state.flashbacks && state.flashbacks.filter(f => f.revealed).length > 0 && (
+              <div className="mt-3 pt-3 border-t border-[#1a1a2e]">
+                <p className="text-[10px] text-[#00ff88]/50 mb-2 uppercase tracking-wider">记忆碎片</p>
+                {state.flashbacks.filter(f => f.revealed).map((fb, i) => (
+                  <div key={i} className="text-[10px] text-[#00ff88]/60 italic mb-1.5 leading-relaxed border-l border-[#00ff88]/20 pl-2">
+                    {fb.content.length > 80 ? fb.content.slice(0, 80) + "..." : fb.content}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -214,6 +268,13 @@ export default function SymbiotePage() {
         <div className="flex items-center gap-2 mb-3">
           <span className="text-xs text-gray-500">可用行动</span>
         </div>
+
+        {/* 分支抉择提示 */}
+        {state.turn > 0 && state.availableActions.some(a => a.includes("前往") || a.includes("进入") || a.includes("返回")) && (
+          <div className="bg-[#00ff88]/5 border border-[#00ff88]/20 rounded-lg p-3 mb-3 animate-pulse">
+            <p className="text-xs text-[#00ff88]">⚠ 抉择时刻 — 你的选择将改变故事走向</p>
+          </div>
+        )}
 
         {/* 推荐行动（共生体建议） */}
         {state.availableActions.length > 0 && state.turn > 0 && (
@@ -264,6 +325,8 @@ export default function SymbiotePage() {
           <p>隐秘目标: {state.symbioteGoal}</p>
           <p>目标进度: {state.symbioteGoalProgress}/100</p>
         </details>
+      )}
+        </>
       )}
     </div>
   );
