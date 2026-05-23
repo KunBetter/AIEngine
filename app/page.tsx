@@ -1,4 +1,8 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { getLatestSave } from "@/lib/save-system";
 
 const games = [
   {
@@ -28,6 +32,9 @@ const games = [
 ];
 
 export default function Home() {
+  const [latestSave, setLatestSave] = useState<ReturnType<typeof getLatestSave>>(null);
+  useEffect(() => { setLatestSave(getLatestSave()); }, []);
+
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-8">
       <div className="text-center mb-12">
@@ -40,6 +47,28 @@ export default function Home() {
           每一个游戏中，AI都不是外挂的聊天机器人，而是驱动核心玩法的实时决策引擎。
         </p>
       </div>
+
+      {latestSave && (
+        <Link
+          href={`/${latestSave.game}`}
+          className="block w-full max-w-4xl mx-auto mb-6 p-4 rounded-xl border border-[#ffaa00]/30 bg-[#ffaa00]/5 hover:bg-[#ffaa00]/10 transition-colors group"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-lg">▶</span>
+              <div>
+                <p className="text-sm text-[#ffaa00] font-bold">继续上次游戏</p>
+                <p className="text-xs text-gray-500">
+                  {latestSave.game === "symbiote" ? "共生体" : latestSave.game === "butterfly" ? "蝴蝶效应" : "异星造物主"}
+                  {" · "}{latestSave.label}
+                  {" · "}{new Date(latestSave.timestamp).toLocaleString("zh-CN")}
+                </p>
+              </div>
+            </div>
+            <span className="text-xs text-gray-600 group-hover:text-gray-400 transition-colors">继续 →</span>
+          </div>
+        </Link>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5 w-full max-w-4xl">
         {games.map((g) => (
