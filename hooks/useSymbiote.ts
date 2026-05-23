@@ -7,9 +7,37 @@ const GOALS = [
   "回收远古外星文明遗物",
   "阻止探索者返回地球",
   "研究人类的恐惧和压力反应",
+  "与远古AI融合",
+  "拯救星球生态",
 ];
 
+const SCENE_TRANSITIONS: Record<string, string[]> = {
+  "着陆点": ["洞穴入口", "外星森林"],
+  "洞穴入口": ["着陆点", "洞穴深处"],
+  "洞穴深处": ["洞穴入口", "远古遗迹"],
+  "外星森林": ["着陆点", "远古遗迹", "外星城市"],
+  "远古遗迹": ["洞穴深处", "外星森林", "废弃实验室"],
+  "外星城市": ["外星森林", "废弃实验室"],
+  "废弃实验室": ["远古遗迹", "外星城市", "返回舱", "远古控制中心"],
+  "返回舱": ["废弃实验室"],
+  "远古控制中心": ["废弃实验室"],
+};
+
 const LOCATIONS = ["着陆点", "洞穴入口", "外星森林", "废弃实验室", "返回舱"];
+
+function checkEnding(state: SymbioteState): string | null {
+  if (state.currentLocation === "返回舱" && state.turn > 10) {
+    if (state.trustMeter > 70 && state.symbioteGoalProgress > 60) return "symbiote_win";
+    if (state.trustMeter < 25 && state.discoveredClues.length >= 3) return "exposed";
+    if (state.trustMeter > 50) return "trust";
+    return "escape";
+  }
+  if (state.currentLocation === "远古控制中心" && state.symbioteGoal === "与远古AI融合") {
+    if (state.trustMeter > 60) return "merge";
+    return "sacrifice";
+  }
+  return null;
+}
 
 type Action =
   | { type: "SET_SCENE"; payload: SymbioteAIResponse }
@@ -47,9 +75,39 @@ function reducer(state: SymbioteState, action: Action): SymbioteState {
       const r = action.payload;
       const newTrust = Math.max(0, Math.min(100, state.trustMeter + r.trustDelta));
 
+      // Handle flashbacks
+      const newFlashbacks = [...state.flashbacks];
+      if (r.flashback?.triggered) {
+        newFlashbacks.push({
+          triggerLocation: state.currentLocation,
+          content: r.flashback.content,
+          revealed: true,
+        });
+      }
+
+      // Handle item pickup via storyFlags (flags starting with "item:")
+      const newInventory = [...state.inventory];
+      if (r.storyFlags) {
+        for (const flag of r.storyFlags) {
+          if (flag.startsWith("item:")) {
+            const itemName = flag.replace("item:", "");
+            if (!newInventory.includes(itemName)) newInventory.push(itemName);
+          }
+        }
+      }
+
+      // Check ending
+      const ending = r.endingTriggered || checkEnding({
+        ...state,
+        currentLocation: r.sceneUpdate.sceneId || state.currentLocation,
+        trustMeter: newTrust,
+        inventory: newInventory,
+        flashbacks: newFlashbacks,
+      });
+
       return {
         ...state,
-        phase: state.turn > 3 ? "exploration" : state.phase,
+        phase: ending ? "ending" : (state.turn > 3 ? "exploration" : state.phase),
         sceneDescription: r.sceneUpdate.description,
         symbioteMessage: r.symbioteAdvice.dialogue,
         availableActions: r.groundTruth.availableActions,
@@ -57,9 +115,12 @@ function reducer(state: SymbioteState, action: Action): SymbioteState {
         trustDelta: r.trustDelta,
         discoveredClues: [
           ...state.discoveredClues,
-          ...(r.storyFlags?.filter((f) => !state.discoveredClues.includes(f)) || []),
+          ...(r.storyFlags?.filter((f: string) => !f.startsWith("item:") && !state.discoveredClues.includes(f)) || []),
         ],
-        symbioteGoalProgress: Math.min(100, state.symbioteGoalProgress + Math.floor(Math.random() * 10) + 5),
+        inventory: newInventory,
+        flashbacks: newFlashbacks,
+        ending,
+        symbioteGoalProgress: Math.min(100, state.symbioteGoalProgress + Math.floor(Math.random() * 8) + 3),
         turn: state.turn + 1,
         gameLog: [
           ...state.gameLog,
