@@ -102,9 +102,6 @@ export default function Home() {
         ))}
       </div>
 
-      <p className="mt-10 text-xs text-gray-600">
-        需要设置 <code className="text-gray-500">ANTHROPIC_API_KEY</code> 环境变量
-      </p>
     </div>
   );
 }
