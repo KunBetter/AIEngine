@@ -5,6 +5,8 @@ import { useButterfly } from "@/hooks/useButterfly";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { StreamingText } from "@/components/ui/StreamingText";
 import { saveGame } from "@/lib/save-system";
+import { PixelEvent } from "@/components/ui/PixelEvent";
+import type { PixelEventData } from "@/components/ui/PixelEvent";
 
 const LOCATION_COORDS: Record<string, { x: number; y: number }> = {
   "钟楼": { x: 200, y: 45 },
@@ -32,7 +34,12 @@ export default function ButterflyPage() {
   const [playerInput, setPlayerInput] = useState("");
   const [showCausalGraph, setShowCausalGraph] = useState(false);
   const [showJournal, setShowJournal] = useState(false);
+  const [pixelEvent, setPixelEvent] = useState<PixelEventData | null>(null);
   const chatRef = useRef<HTMLDivElement>(null);
+  const prevLoopRef = useRef(state.loopNumber);
+  const prevCausalLenRef = useRef(0);
+  const prevDialogueLenRef = useRef(0);
+  const prevPreventedRef = useRef(false);
 
   useEffect(() => {
     if (chatRef.current) {
@@ -46,6 +53,53 @@ export default function ButterflyPage() {
       saveGame("butterfly", 0, state as unknown as Record<string, unknown>, `循环${state.loopNumber}结束`);
     }
   }, [state.timeOfDay]);
+
+  // Pixel event: Time reset (new loop)
+  useEffect(() => {
+    if (state.loopNumber > prevLoopRef.current) {
+      setPixelEvent({ type: "time_reset", duration: 3000 });
+    }
+    prevLoopRef.current = state.loopNumber;
+  }, [state.loopNumber]);
+
+  // Pixel event: Causal ripple (new causal node)
+  useEffect(() => {
+    if (state.causalGraph.length > prevCausalLenRef.current) {
+      setPixelEvent({ type: "causal_ripple" });
+    }
+    prevCausalLenRef.current = state.causalGraph.length;
+  }, [state.causalGraph.length]);
+
+  // Pixel event: Secret (NPC reveals something meaningful)
+  useEffect(() => {
+    if (state.dialogueMessages.length > prevDialogueLenRef.current) {
+      const lastMsg = state.dialogueMessages[state.dialogueMessages.length - 1];
+      if (lastMsg?.role === "npc" && lastMsg.content.length > 50) {
+        // NPC gave a substantial response — might contain secrets
+        const clueWords = ["秘密", "其实", "不知道", "隐藏", "真相", "循环", "钟楼", "消失", "失踪"];
+        if (clueWords.some(w => lastMsg.content.includes(w))) {
+          setPixelEvent({ type: "secret" });
+        }
+      }
+    }
+    prevDialogueLenRef.current = state.dialogueMessages.length;
+  }, [state.dialogueMessages.length]);
+
+  // Pixel event: Breakthrough (hypothesis confirmed)
+  useEffect(() => {
+    const confirmed = state.hypotheses?.filter(h => h.status === "confirmed").length || 0;
+    if (confirmed > 0) {
+      setPixelEvent({ type: "breakthrough", duration: 3000 });
+    }
+  }, [state.hypotheses]);
+
+  // Pixel event: Loop break (key event prevented)
+  useEffect(() => {
+    if (state.keyEvent.prevented && !prevPreventedRef.current) {
+      setPixelEvent({ type: "loop_break", duration: 4000 });
+    }
+    prevPreventedRef.current = state.keyEvent.prevented;
+  }, [state.keyEvent.prevented]);
 
   // Format time
   const timeLabel = `${state.timeOfDay}:00`;
@@ -525,6 +579,7 @@ export default function ButterflyPage() {
           </div>
         </div>
       )}
+      {pixelEvent && <PixelEvent event={pixelEvent} onDone={() => setPixelEvent(null)} />}
     </div>
   );
 }
