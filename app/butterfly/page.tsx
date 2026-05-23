@@ -117,12 +117,23 @@ export default function ButterflyPage() {
 
       {/* 关键事件提示 */}
       <div className="bg-[#ff6b9d]/5 border border-[#ff6b9d]/20 rounded-lg p-3 text-sm text-[#ff6b9d]/80">
-        ⚠ {state.keyEvent.description}
-        <span className="text-gray-500 ml-2">
-          {state.keyEvent.requiredConditions.map((c, i) => (
-            <span key={i} className="mr-2">✓{c}</span>
-          ))}
+        {state.activeMystery === "tower" && "🏚 "}
+        {state.activeMystery === "plague" && "🦠 "}
+        {state.activeMystery === "invasion" && "👥 "}
+        <span className="font-bold">
+          {state.activeMystery === "tower" && "钟楼倒塌"}
+          {state.activeMystery === "plague" && "诡异瘟疫"}
+          {state.activeMystery === "invasion" && "外来者入侵"}
         </span>
+        <span className="mx-2">—</span>
+        {state.keyEvent.description}
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {state.keyEvent.requiredConditions.map((c, i) => (
+            <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-[#ff6b9d]/10 text-[#ff6b9d]/60">
+              {c.includes("✓") ? c : "☐ " + c}
+            </span>
+          ))}
+        </div>
       </div>
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-0">
@@ -239,6 +250,9 @@ export default function ButterflyPage() {
                   <span className="text-white truncate">{npc.name}</span>
                   <span className="text-gray-500 truncate">{npc.currentMood}</span>
                   <span className="text-gray-600 ml-auto">{npc.location}</span>
+                  {npc.dejaVu && (
+                    <span className="text-[#ff6b9d]/50 text-[9px] ml-auto" title={npc.dejaVu}>💭</span>
+                  )}
                 </button>
               ))}
             </div>
@@ -432,6 +446,54 @@ export default function ButterflyPage() {
               ))}
             </div>
           )}
+
+          {/* 玩家假设 */}
+          <div className="mt-4 pt-3 border-t border-[#1a1a2e]">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-gray-500">假设推理</span>
+              <button
+                onClick={() => {
+                  const input = window.prompt("输入你的假设（如：Rose没去钟楼是因为怀表被偷了）:");
+                  if (input?.trim()) {
+                    const newHypothesis = {
+                      id: `hyp_${Date.now()}`,
+                      loopNumber: state.loopNumber,
+                      content: input.trim(),
+                      status: "pending" as const,
+                    };
+                    // Add hypothesis via journal dispatch
+                    sendAction("investigate", `[假设] ${input.trim()}`);
+                  }
+                }}
+                className="text-[10px] px-2 py-0.5 rounded border border-[#ff6b9d]/30 text-[#ff6b9d] hover:bg-[#ff6b9d]/10 transition-colors"
+              >
+                + 新假设
+              </button>
+            </div>
+            {state.hypotheses.length === 0 ? (
+              <p className="text-[10px] text-gray-600">尚未建立假设。观察因果链后提出你的推理。</p>
+            ) : (
+              <div className="space-y-1">
+                {state.hypotheses.map((h) => (
+                  <div
+                    key={h.id}
+                    className={`text-[10px] px-2 py-1 rounded ${
+                      h.status === "confirmed"
+                        ? "bg-green-400/10 text-green-400"
+                        : h.status === "rejected"
+                        ? "bg-red-400/10 text-red-400 line-through"
+                        : "bg-[#1a1a2e] text-gray-400"
+                    }`}
+                  >
+                    {h.status === "confirmed" && "✓ "}
+                    {h.status === "rejected" && "✗ "}
+                    {h.status === "pending" && "? "}
+                    [循环{h.loopNumber}] {h.content}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
