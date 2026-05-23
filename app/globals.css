@@ -109,3 +109,132 @@ body {
     font-size: 0.75rem !important;
   }
 }
+
+/* ── PixelEvent animations ─────────────────────────────── */
+
+/* clock hand spin */
+@keyframes clockSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* causal ripple expanding rings */
+@keyframes rippleOut {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(8); opacity: 0; }
+}
+
+/* puzzle-piece joining */
+@keyframes puzzleJoin {
+  0% { opacity: 0; transform: scale(0.3); }
+  60% { opacity: 1; transform: scale(1.1); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* glass shards flying apart */
+@keyframes shardFly {
+  0% { opacity: 1; transform: translate(0, 0) rotate(0deg); }
+  100% { opacity: 0; transform: translate(var(--sx, 40px), var(--sy, -60px)) rotate(var(--sr, 180deg)); }
+}
+
+/* meteor falling */
+@keyframes meteorFall {
+  0% { transform: translateY(-40px); opacity: 1; }
+  80% { opacity: 1; }
+  100% { transform: translateY(160px); opacity: 0; }
+}
+
+/* explosion particles burst */
+@keyframes explodeOut {
+  0% { opacity: 1; transform: translate(0, 0) scale(1); }
+  100% { opacity: 0; transform: translate(var(--ex, 0px), var(--ey, 0px)) scale(0.3); }
+}
+
+/* civilization buildings rising */
+@keyframes buildUp {
+  0% { transform: scaleY(0); }
+  100% { transform: scaleY(1); }
+}
+
+/* discovery particle burst */
+@keyframes particleExplode {
+  0% { opacity: 1; transform: translate(0, 0) scale(1); }
+  100% { opacity: 0; transform: translate(var(--tx), var(--ty)) scale(0.2); }
+}
+
+/* glitch stripe sliding */
+@keyframes glitchSlide {
+  0% { transform: translateX(-20%); opacity: 0; }
+  20% { transform: translateX(5%); opacity: 1; }
+  40% { transform: translateX(-3%); opacity: 0.8; }
+  100% { transform: translateX(0); opacity: 0.6; }
+}
+
+/* twinkling stars */
+@keyframes twinkle {
+  0%, 100% { opacity: 0.2; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+/* ── PixelEvent utility classes ────────────────────────── */
+
+/* Discovery */
+.pixel-explosion {
+  position: relative;
+  width: 120px;
+  height: 120px;
+}
+
+.pixel-particle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+  animation: particleExplode 0.8s ease-out forwards;
+}
+
+/* Flashback */
+.glitch-strip {
+  animation: glitchSlide 0.6s ease-out forwards;
+  border-radius: 2px;
+}
+
+/* Ending */
+.ending-stars {
+  position: absolute;
+  inset: 0;
+}
+
+.ending-star {
+  position: absolute;
+  background: white;
+  border-radius: 50%;
+  animation: twinkle 1.5s ease-in-out infinite;
+}
+
+/* Meteor */
+.meteor-fall {
+  animation: meteorFall 1s ease-in forwards;
+  border-radius: 2px;
+}
+
+.explosion-particles {
+  position: relative;
+  width: 80px;
+  height: 80px;
+}
+
+.explosion-dot {
+  top: 40px;
+  left: 40px;
+}
+
+/* Building */
+.building {
+  height: 60px;
+  min-height: 0;
+  transform-origin: bottom;
+  border-radius: 1px 1px 0 0;
+}
