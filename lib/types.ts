@@ -35,6 +35,31 @@ export interface SymbioteState {
   trustDelta?: number;
   isLoading?: boolean;
   error?: string;
+  branchChoice: string | null;
+  flashbacks: FlashbackEntry[];
+  ending: string | null;
+}
+
+export interface FlashbackEntry {
+  triggerLocation: string;
+  content: string;
+  revealed: boolean;
+}
+
+export interface SceneDef {
+  id: string;
+  name: string;
+  description: string;
+  neighborIds: string[];
+  branchPoint: boolean;
+  flashbackGoal?: string;
+}
+
+export interface EndingDef {
+  id: string;
+  name: string;
+  description: string;
+  condition: (state: SymbioteState) => boolean;
 }
 
 export interface SymbioteMessage {
@@ -48,6 +73,9 @@ export interface SymbioteAIResponse {
     atmosphere: string;
     visibleItems: string[];
     threats: string[];
+    sceneId?: string;
+    availableExits?: string[];
+    branchPrompt?: string;
   };
   symbioteAdvice: {
     dialogue: string;
@@ -63,6 +91,8 @@ export interface SymbioteAIResponse {
   };
   trustDelta: number;
   storyFlags: string[];
+  flashback?: { triggered: boolean; content: string };
+  endingTriggered?: string;
 }
 
 // ---- 蝴蝶效应 (Butterfly Effect) ----

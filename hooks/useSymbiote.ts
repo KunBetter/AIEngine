@@ -35,6 +35,9 @@ function createInitialState(): SymbioteState {
     gameLog: [],
     turn: 0,
     storyFlags: [],
+    branchChoice: null,
+    flashbacks: [],
+    ending: null,
   };
 }
 
