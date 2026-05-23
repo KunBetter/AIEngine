@@ -7,7 +7,7 @@ const openai = new OpenAI({
 });
 
 const DEFAULT_MODEL = "deepseek-chat";
-const DEFAULT_MAX_TOKENS = 4096;
+const DEFAULT_MAX_TOKENS = 2048;
 const MAX_RETRIES = 3;
 
 function sleep(ms: number) {
@@ -34,20 +34,54 @@ export function extractJSON(text: string): string {
   return cleaned;
 }
 
+export function validateJSON(obj: Record<string, unknown>, schema: Record<string, string>): string | null {
+  for (const [key, type] of Object.entries(schema)) {
+    if (!(key in obj)) return `缺少字段: ${key}`;
+    const val = obj[key];
+    if (type === "array" && !Array.isArray(val)) return `字段 ${key} 应为数组`;
+    if (type === "number" && typeof val !== "number") return `字段 ${key} 应为数字`;
+    if (type === "string" && typeof val !== "string") return `字段 ${key} 应为字符串`;
+    if (type === "object" && (typeof val !== "object" || val === null || Array.isArray(val))) return `字段 ${key} 应为对象`;
+  }
+  return null;
+}
+
+const responseCache = new Map<string, { data: Record<string, unknown>; timestamp: number }>();
+const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+function cacheKey(systemPrompt: string, userMessage: string): string {
+  const input = systemPrompt.slice(0, 200) + userMessage.slice(0, 200);
+  let hash = 0;
+  for (let i = 0; i < input.length; i++) {
+    hash = ((hash << 5) - hash) + input.charCodeAt(i);
+    hash |= 0;
+  }
+  return String(hash);
+}
+
 /**
  * 非流式调用 DeepSeek API，自动重试，解析 JSON
  */
 export async function callAI(
   systemPrompt: string,
   userMessage: string,
-  options: AIRequestOptions = {}
+  options: AIRequestOptions = {},
+  schema?: Record<string, string>
 ): Promise<Record<string, unknown>> {
   const model = options.model || DEFAULT_MODEL;
   const maxTokens = options.maxTokens || DEFAULT_MAX_TOKENS;
 
+  const key = cacheKey(systemPrompt, userMessage);
+  const cached = responseCache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data;
+  }
+
   let lastError: Error | null = null;
 
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+  const maxRetries = schema ? 3 : MAX_RETRIES;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       const response = await openai.chat.completions.create({
         model,
@@ -71,10 +105,21 @@ export async function callAI(
         throw new Error("AI 返回格式错误：期望 JSON 对象");
       }
 
+      if (schema) {
+        const validationError = validateJSON(parsed, schema);
+        if (validationError) {
+          if (attempt < maxRetries - 1) {
+            userMessage += `\n\n[校验失败: ${validationError}。请确保输出包含所有必需字段。]`;
+            continue;
+          }
+        }
+      }
+
+      responseCache.set(key, { data: parsed, timestamp: Date.now() });
       return parsed as Record<string, unknown>;
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      if (attempt < MAX_RETRIES - 1) {
+      if (attempt < maxRetries - 1) {
         await sleep(Math.pow(2, attempt) * 500);
       }
     }

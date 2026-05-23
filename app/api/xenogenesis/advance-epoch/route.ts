@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { callAIStream, extractJSON } from "@/lib/ai-client";
-import { XENOGENESIS_SYSTEM_PROMPT } from "@/lib/prompt-templates";
+import { XENOGENESIS_SYSTEM } from "@/lib/prompts/xenogenesis/system";
+import { ECOLOGY_RULES } from "@/lib/prompts/xenogenesis/ecology-rules";
+import { XENOGENESIS_EXAMPLE } from "@/lib/prompts/xenogenesis/examples";
 import { createSSEResponse, sseEncoder } from "@/lib/stream-response";
 import type { XenogenesisAIResponse, XenogenesisState } from "@/lib/types";
 
@@ -11,6 +13,8 @@ export async function POST(req: NextRequest) {
 
     const userMessage = buildEpochMessage(gameState);
 
+    const systemPrompt = [XENOGENESIS_SYSTEM, ECOLOGY_RULES, XENOGENESIS_EXAMPLE].join("\n\n---\n\n");
+
     const encoder = sseEncoder();
     let fullText = "";
 
@@ -18,7 +22,7 @@ export async function POST(req: NextRequest) {
       async start(controller) {
         try {
           await callAIStream(
-            XENOGENESIS_SYSTEM_PROMPT,
+            systemPrompt,
             userMessage,
             (chunk) => {
               fullText += chunk;

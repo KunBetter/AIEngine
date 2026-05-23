@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { callAI, callAIStream, extractJSON } from "@/lib/ai-client";
-import { BUTTERFLY_SYSTEM_PROMPT } from "@/lib/prompt-templates";
+import { BUTTERFLY_SYSTEM } from "@/lib/prompts/butterfly/system";
+import { buildNPCProfile } from "@/lib/prompts/butterfly/npc-profiles";
+import { BUTTERFLY_EXAMPLE } from "@/lib/prompts/butterfly/examples";
 import { createSSEResponse, sseEncoder } from "@/lib/stream-response";
 import type { ButterflyState, NPCState } from "@/lib/types";
 
@@ -16,6 +18,9 @@ export async function POST(req: NextRequest) {
 
     const encoder = sseEncoder();
     let fullText = "";
+
+    const npcCtx = targetNPC && gameState.npcs[targetNPC] ? buildNPCProfile(gameState.npcs[targetNPC]) : "";
+    const systemPrompt = [BUTTERFLY_SYSTEM, npcCtx, BUTTERFLY_EXAMPLE].filter(Boolean).join("\n\n---\n\n");
 
     let userMessage = "";
 
@@ -34,7 +39,7 @@ export async function POST(req: NextRequest) {
       async start(controller) {
         try {
           await callAIStream(
-            BUTTERFLY_SYSTEM_PROMPT,
+            systemPrompt,
             userMessage,
             (chunk) => {
               fullText += chunk;

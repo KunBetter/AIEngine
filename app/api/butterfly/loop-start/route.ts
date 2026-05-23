@@ -1,12 +1,16 @@
 import { NextRequest } from "next/server";
 import { callAI, extractJSON } from "@/lib/ai-client";
-import { BUTTERFLY_SYSTEM_PROMPT } from "@/lib/prompt-templates";
-import type { ButterflyState, NPCState } from "@/lib/types";
+import { BUTTERFLY_SYSTEM } from "@/lib/prompts/butterfly/system";
+import { buildAllNPCProfiles } from "@/lib/prompts/butterfly/npc-profiles";
+import type { ButterflyState } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { gameState } = body as { gameState: ButterflyState };
+
+    const npcCtx = buildAllNPCProfiles(gameState.npcs);
+    const systemPrompt = [BUTTERFLY_SYSTEM, npcCtx].filter(Boolean).join("\n\n---\n\n");
 
     const causalSummary = gameState.causalGraph
       .map((n) => `- [循环${n.loopNumber}] ${n.action} → 影响: ${n.affectedNPCs.join(", ")} | ${n.consequenceDescription} (强度:${n.magnitude})`)
@@ -46,7 +50,7 @@ ${gameState.keyEvent.description}
   "initialClues": ["玩家在循环开始时能注意到的异常现象"]
 }`;
 
-    const result = await callAI(BUTTERFLY_SYSTEM_PROMPT, userMessage, { temperature: 0.8 });
+    const result = await callAI(systemPrompt, userMessage, { temperature: 0.8 });
     return Response.json(result);
   } catch (err) {
     return Response.json(

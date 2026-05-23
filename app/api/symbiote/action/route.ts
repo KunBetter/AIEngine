@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { callAI, callAIStream, extractJSON } from "@/lib/ai-client";
-import { SYMBIOTE_SYSTEM_PROMPT } from "@/lib/prompt-templates";
+import { SYMBIOTE_SYSTEM } from "@/lib/prompts/symbiote/system";
+import { buildSceneContext } from "@/lib/prompts/symbiote/scenes";
+import { SYMBIOTE_EXAMPLE } from "@/lib/prompts/symbiote/examples";
 import { createSSEResponse, sseEncoder } from "@/lib/stream-response";
 import type { SymbioteAIResponse } from "@/lib/types";
 
@@ -11,6 +13,9 @@ export async function POST(req: NextRequest) {
 
     const userMessage = buildUserMessage(gameState, playerAction);
 
+    const sceneCtx = buildSceneContext(gameState.currentLocation as string);
+    const systemPrompt = [SYMBIOTE_SYSTEM, sceneCtx, SYMBIOTE_EXAMPLE].filter(Boolean).join("\n\n---\n\n");
+
     if (useStream) {
       // 流式模式：边生成边推送
       const encoder = sseEncoder();
@@ -20,7 +25,7 @@ export async function POST(req: NextRequest) {
         async start(controller) {
           try {
             await callAIStream(
-              SYMBIOTE_SYSTEM_PROMPT,
+              systemPrompt,
               userMessage,
               (chunk) => {
                 fullText += chunk;
@@ -51,7 +56,7 @@ export async function POST(req: NextRequest) {
       return createSSEResponse(readable);
     } else {
       // 非流式模式
-      const result = await callAI(SYMBIOTE_SYSTEM_PROMPT, userMessage);
+      const result = await callAI(systemPrompt, userMessage);
       return Response.json(result as unknown as SymbioteAIResponse);
     }
   } catch (err) {
