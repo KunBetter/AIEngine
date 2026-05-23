@@ -238,3 +238,87 @@ body {
   transform-origin: bottom;
   border-radius: 1px 1px 0 0;
 }
+
+/* ── Task 2: additional pixel animation keyframes ────────── */
+
+/* particle burst (alternate burst pattern) */
+@keyframes particleBurst {
+  0%   { transform: translate(0, 0) scale(1); opacity: 1; }
+  100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+}
+
+/* glitch shake (horizontal jitter) */
+@keyframes glitchShake {
+  0%, 100% { transform: translateX(0); }
+  25%      { transform: translateX(-4px); }
+  50%      { transform: translateX(4px); }
+  75%      { transform: translateX(-2px); }
+}
+
+/* danger border pulse */
+@keyframes dangerPulse {
+  0%, 100% { opacity: 0.3; }
+  50%      { opacity: 1; }
+}
+
+/* twinkling stars (alternate twinkle) */
+@keyframes starTwinkle {
+  0%, 100% { opacity: 0.2; transform: scale(1); }
+  50%      { opacity: 1;   transform: scale(2); }
+}
+
+/* calendar digit flip */
+@keyframes calendarFlip {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.3; }
+}
+
+/* dissolve / fade-out with blur */
+@keyframes dissolve {
+  0%   { opacity: 1; filter: none; }
+  100% { opacity: 0; filter: blur(4px); }
+}
+
+/* ── Task 2: additional utility classes ──────────────────── */
+
+.item-icon { image-rendering: pixelated; }
+
+.danger-border { animation: dangerPulse 0.8s ease-in-out infinite; }
+
+.calendar-digit { animation: calendarFlip 0.8s step-end infinite; }
+
+.skull-grid { animation: dissolve 2s ease-in forwards; animation-delay: 0.5s; }
+
+/* puzzle-piece scatter positions */
+.puzzle-piece:nth-child(1) { --px: -30px; --py: -30px; }
+.puzzle-piece:nth-child(2) { --px:  30px; --py: -30px; }
+.puzzle-piece:nth-child(3) { --px: -30px; --py:  30px; }
+.puzzle-piece:nth-child(4) { --px:  30px; --py:  30px; }
+
+/* glass-shard fly-out directions */
+.glass-shard:nth-child(1) { --sx: -20px; --sy: -25px; }
+.glass-shard:nth-child(2) { --sx:  25px; --sy: -15px; }
+.glass-shard:nth-child(3) { --sx: -15px; --sy:  20px; }
+.glass-shard:nth-child(4) { --sx:  20px; --sy:  25px; }
+.glass-shard:nth-child(5) { --sx: -25px; --sy:  10px; }
+.glass-shard:nth-child(6) { --sx:  10px; --sy: -20px; }
+
+/* explosion-dot scatter positions */
+.explosion-dot:nth-child(1)  { --ex: -30px; --ey: -30px; }
+.explosion-dot:nth-child(2)  { --ex:   0px; --ey: -40px; }
+.explosion-dot:nth-child(3)  { --ex:  30px; --ey: -30px; }
+.explosion-dot:nth-child(4)  { --ex: -40px; --ey:   0px; }
+.explosion-dot:nth-child(5)  { --ex:  40px; --ey:   0px; }
+.explosion-dot:nth-child(6)  { --ex: -30px; --ey:  30px; }
+.explosion-dot:nth-child(7)  { --ex:   0px; --ey:  40px; }
+.explosion-dot:nth-child(8)  { --ex:  30px; --ey:  30px; }
+.explosion-dot:nth-child(9)  { --ex: -15px; --ey: -20px; }
+.explosion-dot:nth-child(10) { --ex:  15px; --ey: -20px; }
+.explosion-dot:nth-child(11) { --ex: -15px; --ey:  20px; }
+.explosion-dot:nth-child(12) { --ex:  15px; --ey:  20px; }
+
+/* building heights via CSS variable */
+.building:nth-child(1) { --bh: 30px; }
+.building:nth-child(2) { --bh: 50px; }
+.building:nth-child(3) { --bh: 40px; }
+.building:nth-child(4) { --bh: 60px; }
