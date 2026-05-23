@@ -15,18 +15,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="zh-CN" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
-        <nav className="flex items-center gap-4 px-6 py-3 border-b border-[#2a2a4a] bg-[#0d0d24] shrink-0">
+        <nav className="flex items-center gap-2 sm:gap-4 px-3 sm:px-6 py-2 sm:py-3 border-b border-[#2a2a4a] bg-[#0d0d24] shrink-0 overflow-x-auto">
           <Link href="/" className="text-sm font-bold tracking-wider text-gray-400 hover:text-white transition-colors">
             AI ENGINE
           </Link>
           <span className="text-gray-600">/</span>
-          <Link href="/symbiote" className="text-sm text-gray-500 hover:text-[#00ff88] transition-colors">
+          <Link href="/symbiote" className="text-xs sm:text-sm text-gray-500 hover:text-[#00ff88] transition-colors">
             共生体
           </Link>
-          <Link href="/butterfly" className="text-sm text-gray-500 hover:text-[#ff6b9d] transition-colors">
+          <Link href="/butterfly" className="text-xs sm:text-sm text-gray-500 hover:text-[#ff6b9d] transition-colors">
             蝴蝶效应
           </Link>
-          <Link href="/xenogenesis" className="text-sm text-gray-500 hover:text-[#64b5f6] transition-colors">
+          <Link href="/xenogenesis" className="text-xs sm:text-sm text-gray-500 hover:text-[#64b5f6] transition-colors">
             异星造物主
           </Link>
         </nav>
