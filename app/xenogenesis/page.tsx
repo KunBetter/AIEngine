@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useXenogenesis } from "@/hooks/useXenogenesis";
 import type { SpeciesTraits, SpeciesDef, XenogenesisState } from "@/lib/types";
+import { ACHIEVEMENTS } from "@/lib/types";
 
 const TRAIT_LABELS: Record<keyof SpeciesTraits, string> = {
   size: "体型",
@@ -18,6 +19,7 @@ export default function XenogenesisPage() {
   const { state, advanceEpoch, addSpecies, updateEnvironment, resetGame, error } =
     useXenogenesis();
   const [showCreator, setShowCreator] = useState(false);
+  const [showAchievements, setShowAchievements] = useState(false);
 
   // 物种创建表单
   const [newName, setNewName] = useState("");
@@ -54,6 +56,7 @@ export default function XenogenesisPage() {
             {state.planetName}
           </h1>
           <span className="text-sm text-gray-500">第 {state.epoch} 纪元</span>
+          <span className="text-xs text-gray-600 font-mono" title="星球种子码">🌱 {state.seed}</span>
           <div className="flex gap-3 text-xs text-gray-400">
             <span>🌡 {state.environment.temperature}°C</span>
             <span>💧 {state.environment.waterCoverage}%</span>
@@ -66,6 +69,12 @@ export default function XenogenesisPage() {
             className="text-xs px-3 py-1.5 rounded border border-[#64b5f6]/30 text-[#64b5f6] hover:bg-[#64b5f6]/10 transition-colors"
           >
             + 创建物种
+          </button>
+          <button
+            onClick={() => setShowAchievements(!showAchievements)}
+            className="text-xs px-3 py-1.5 rounded border border-yellow-400/30 text-yellow-400 hover:bg-yellow-400/10 transition-colors"
+          >
+            🏆 {state.achievements.length}/15
           </button>
           <button
             onClick={resetGame}
@@ -133,6 +142,30 @@ export default function XenogenesisPage() {
         </div>
       )}
 
+      {/* 成就面板 */}
+      {showAchievements && (
+        <div className="bg-[#0d0d24] border border-[#2a2a4a] rounded-xl p-4 max-h-48 overflow-y-auto">
+          <h3 className="text-xs text-gray-500 mb-2 uppercase tracking-wider">成就 ({state.achievements.length}/15)</h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5">
+            {Object.entries(ACHIEVEMENTS).map(([key, desc]) => {
+              const unlocked = state.achievements.includes(key);
+              return (
+                <div
+                  key={key}
+                  className={`text-[10px] px-2 py-1.5 rounded border ${
+                    unlocked
+                      ? "text-yellow-400 bg-yellow-400/5 border-yellow-400/20"
+                      : "text-gray-700 border-[#1a1a2e]"
+                  }`}
+                >
+                  {unlocked ? desc : "??? " + desc.split(":")[1]?.trim()}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* 主内容区 */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-0">
         {/* 物种面板 */}
@@ -188,6 +221,26 @@ export default function XenogenesisPage() {
                     {s.status === "declining" && "📉 衰减"}
                     {s.status === "endangered" && "⚠ 濒危"}
                   </div>
+                  {/* 文明状态 */}
+                  {(() => {
+                    const civ = state.civilizations.find(c => c.speciesId === s.id && c.stage !== "collapsed");
+                    if (!civ) return null;
+                    const stageLabels: Record<string, string> = {
+                      tools: "🔧 工具时代", tribal: "🏘 部落时代", agriculture: "🌾 农业时代",
+                      industrial: "🏭 工业时代", information: "💻 信息时代", interstellar: "⭐ 星际文明",
+                    };
+                    const collapsedCiv = state.civilizations.find(c => c.speciesId === s.id && c.stage === "collapsed");
+                    return (
+                      <div className="mt-2 pt-2 border-t border-[#1a1a2e]">
+                        <span className="text-[10px] text-[#64b5f6]">
+                          {civ ? stageLabels[civ.stage] || civ.stage : ""}
+                        </span>
+                        {collapsedCiv && (
+                          <span className="text-[10px] text-red-400 ml-2">💀 文明崩塌</span>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               ))}
               {extinctSpecies.map((s) => (
@@ -262,14 +315,21 @@ export default function XenogenesisPage() {
                     <p className="text-gray-300 leading-relaxed">{epoch.narrative}</p>
                     {epoch.notableEvents.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mt-1.5">
-                        {epoch.notableEvents.map((ev, i) => (
-                          <span
-                            key={i}
-                            className="text-[10px] px-1.5 py-0.5 rounded bg-[#64b5f6]/10 text-[#64b5f6]"
-                          >
-                            {ev}
-                          </span>
-                        ))}
+                        {epoch.notableEvents.map((ev, i) => {
+                          const isDisaster = ["陨石", "冰河", "瘟疫", "耀斑", "灾难", "灭绝"].some(k => ev.includes(k));
+                          return (
+                            <span
+                              key={i}
+                              className={`text-[10px] px-1.5 py-0.5 rounded ${
+                                isDisaster
+                                  ? "bg-red-400/10 text-red-400"
+                                  : "bg-[#64b5f6]/10 text-[#64b5f6]"
+                              }`}
+                            >
+                              {ev}
+                            </span>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
