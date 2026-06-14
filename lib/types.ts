@@ -505,3 +505,67 @@ export interface ButterflyAIResponseV2 {
     conditionHint: string[];
   };
 }
+
+// ---- 共生体 v2 类型 ----
+
+export interface EvidenceCard {
+  id: string;
+  title: string;
+  description: string;
+  sourceLocation: string;
+  echo7Explanation: string;
+  hiddenContradiction?: string;
+  connectedTo: string[];
+  credibility: number;
+}
+
+export interface TrustState {
+  surfaceTrust: number;
+  trueTrust: number;
+  echo7Alertness: number;
+}
+
+export interface SurvivalState {
+  health: number;
+  energy: number;
+  oxygen: number;
+}
+
+export interface SymbioteStateV2 extends SymbioteState {
+  evidenceCards: EvidenceCard[];
+  trustState: TrustState;
+  survival: SurvivalState;
+  activeConfrontation: boolean;
+  confrontationHistory: ConfrontationRound[];
+  echo7Alertness: number;
+}
+
+export interface ConfrontationRound {
+  playerClaim: string;
+  evidenceUsed: string[];
+  echo7Response: string;
+  echo7EmotionalState: "defensive" | "cornered" | "confessing" | "defiant";
+  outcome: "player_advances" | "echo7_deflects" | "echo7_confesses" | "stalemate";
+}
+
+export interface SymbioteAIResponseV2 extends SymbioteAIResponse {
+  echo7Strategy: {
+    alertnessLevel: number;
+    isLying: boolean;
+    lieTarget: string;
+    manipulationType: "misdirect" | "omit" | "gaslight" | "none";
+  };
+  evidenceCards: EvidenceCard[];
+  contradictionDetected?: {
+    cardA: string;
+    cardB: string;
+    description: string;
+  };
+  confrontationResponse?: {
+    dialogue: string;
+    emotionalState: "defensive" | "cornered" | "confessing" | "defiant";
+    revealsTruth: boolean;
+    revealedInfo: string;
+    trustCost: number;
+  };
+}
