@@ -1,15 +1,18 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useXenogenesis } from "@/hooks/useXenogenesis";
+import { useXenogenesisV2 } from "@/hooks/useXenogenesis";
 import type { SpeciesTraits, SpeciesDef, XenogenesisState } from "@/lib/types";
 import { ACHIEVEMENTS } from "@/lib/types";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
-import { StreamingText } from "@/components/ui/StreamingText";
 import { GameCard } from "@/components/ui/GameCard";
 import { saveGame } from "@/lib/save-system";
 import { PixelEvent } from "@/components/ui/PixelEvent";
 import type { PixelEventData } from "@/components/ui/PixelEvent";
+import { PlanetMap } from "@/components/game/PlanetMap";
+import { SpeciesLab } from "@/components/game/SpeciesLab";
+import { InterventionPanel } from "@/components/game/InterventionPanel";
+import { TICKS_PER_EPOCH } from "@/lib/behavior-engine";
 
 const TRAIT_LABELS: Record<keyof SpeciesTraits, string> = {
   size: "体型",
@@ -21,234 +24,84 @@ const TRAIT_LABELS: Record<keyof SpeciesTraits, string> = {
   specialAbility: "特殊",
 };
 
-// ---- 纪元内演化模拟 ----
-
-interface SimLayer {
-  running: boolean;
-  progress: number;           // 0→1，当前纪元的播放进度
-  epochStartPops: Record<string, number>; // 纪元开始时的种群
-}
-
-const EPOCH_DURATION_MS = 3000; // 纪元内演化动画时长
-
-function lerpPops(
-  startPops: Record<string, number>,
-  targetPops: Record<string, number>,
-  t: number
-): Record<string, number> {
-  const result: Record<string, number> = {};
-  for (const id of Object.keys(targetPops)) {
-    const start = startPops[id] ?? targetPops[id];
-    result[id] = Math.round(start + (targetPops[id] - start) * t);
-  }
-  return result;
-}
-
 // ---- 页面组件 ----
 
 export default function XenogenesisPage() {
-  const { state, advanceEpoch, addSpecies, updateEnvironment, resetGame, error } =
-    useXenogenesis();
-  const [showCreator, setShowCreator] = useState(false);
+  const { state, advanceTick, startEpoch, endEpoch, addSpecies, useIntervention, updateEnvironment, resetGame, error } =
+    useXenogenesisV2();
+
   const [showAchievements, setShowAchievements] = useState(false);
   const [pixelEvent, setPixelEvent] = useState<PixelEventData | null>(null);
 
-  // 纪元间自动推进
-  const [autoAdvance, setAutoAdvance] = useState(false);
-  const autoAdvanceRef = useRef(false);
+  // V2 toggles
+  const [showLab, setShowLab] = useState(false);
+  const [showIntervention, setShowIntervention] = useState(false);
+  const [showMap, setShowMap] = useState(true);
 
-  // 纪元内演化模拟
-  const [sim, setSim] = useState<SimLayer>({
-    running: false,
-    progress: 1,
-    epochStartPops: {},
-  });
-  const simRef = useRef(sim);
-  useEffect(() => { simRef.current = sim; }, [sim]);
-  const animFrameRef = useRef<number>(0);
-  const prevDisasterLenRef = useRef(0);
-  const prevCivLenRef = useRef(0);
-  const prevExtinctCountRef = useRef(0);
-  const prevTraitsHashRef = useRef("");
+  // Play mode: auto-advances ticks and starts new epochs
+  const [isPlaying, setIsPlaying] = useState(false);
+  const isPlayingRef = useRef(false);
 
-  // 物种创建
-  const [newName, setNewName] = useState("");
-  const [newType, setNewType] = useState<SpeciesDef["type"]>("herbivore");
-  const [newTraits, setNewTraits] = useState<SpeciesTraits>({
-    size: 5, metabolism: 5, reproduction: 5,
-    intelligence: 3, defense: 3, adaptability: 5,
-  });
+  // Refs for stable access to latest functions
+  const advanceTickRef = useRef(advanceTick);
+  useEffect(() => { advanceTickRef.current = advanceTick; }, [advanceTick]);
 
-  const handleCreate = () => {
-    if (!newName.trim()) return;
-    addSpecies({
-      name: newName.trim(),
-      type: newType,
-      traits: { ...newTraits },
-      population: 100,
-      status: "stable",
-      epochCreated: state.epoch,
+  const endEpochRef = useRef(endEpoch);
+  useEffect(() => { endEpochRef.current = endEpoch; }, [endEpoch]);
+
+  const startEpochRef = useRef(startEpoch);
+  useEffect(() => { startEpochRef.current = startEpoch; }, [startEpoch]);
+
+  // ---- Tick-by-tick advancement when epoch is running ----
+
+  useEffect(() => {
+    if (!state.isEpochRunning) return;
+    if (state.currentTick >= state.totalTicks) return;
+
+    const delay = isPlayingRef.current ? 30 : 1;
+    const timer = setTimeout(() => advanceTickRef.current(), delay);
+    return () => clearTimeout(timer);
+  }, [state.isEpochRunning, state.currentTick, state.totalTicks]);
+
+  // ---- End epoch when all ticks complete ----
+
+  useEffect(() => {
+    if (!state.isEpochRunning || state.currentTick < state.totalTicks) return;
+
+    endEpochRef.current().then(() => {
+      if (isPlayingRef.current) {
+        setTimeout(() => startEpochRef.current(), 800);
+      }
     });
-    setNewName("");
-    setShowCreator(false);
-  };
+  }, [state.isEpochRunning, state.currentTick, state.totalTicks]);
 
-  // 获取当前展示用的物种数据（经过演化插值）
-  const currentSpecies = state.species;
-  const displaySpecies = { ...currentSpecies };
-  if (sim.progress < 1 && Object.keys(sim.epochStartPops).length > 0) {
-    const targetPops: Record<string, number> = {};
-    for (const [id, s] of Object.entries(currentSpecies)) {
-      targetPops[id] = s.population;
-    }
-    const lerped = lerpPops(sim.epochStartPops, targetPops, sim.progress);
-    for (const [id, pop] of Object.entries(lerped)) {
-      if (displaySpecies[id]) {
-        displaySpecies[id] = { ...displaySpecies[id], population: pop };
-      }
-    }
-  }
-
-  const aliveSpecies = Object.values(displaySpecies).filter((s) => s.status !== "extinct");
-  const extinctSpecies = Object.values(displaySpecies).filter((s) => s.status === "extinct");
-  const currentEpoch = state.timeline[state.timeline.length - 1];
-
-  // ---- 纪元内演化动画 ----
-
-  const startEpochSim = useCallback(() => {
-    // 记录纪元开始时的种群
-    const startPops: Record<string, number> = {};
-    for (const [id, s] of Object.entries(state.species)) {
-      startPops[id] = s.population;
-    }
-    const newSim: SimLayer = { running: true, progress: 0, epochStartPops: startPops };
-    setSim(newSim);
-    simRef.current = newSim;
-
-    let startTime: number | null = null;
-
-    const animate = (timestamp: number) => {
-      const current = simRef.current;
-      if (!current.running) return;
-
-      if (!startTime) startTime = timestamp;
-      const elapsed = timestamp - startTime;
-      const p = Math.min(1, elapsed / EPOCH_DURATION_MS);
-
-      setSim(prev => ({ ...prev, progress: p }));
-
-      if (p < 1) {
-        animFrameRef.current = requestAnimationFrame(animate);
-      } else {
-        setSim(prev => ({ ...prev, running: false, progress: 1 }));
-      }
-    };
-
-    animFrameRef.current = requestAnimationFrame(animate);
-  }, [state.species]);
-
-  const pauseSim = useCallback(() => {
-    cancelAnimationFrame(animFrameRef.current);
-    setSim(prev => ({ ...prev, running: false }));
-  }, []);
-
-  const resumeSim = useCallback(() => {
-    if (sim.progress >= 1) return;
-    const newSim = { ...sim, running: true };
-    setSim(newSim);
-    simRef.current = newSim;
-
-    const startFromProgress = sim.progress;
-    let startTime: number | null = null;
-
-    const animate = (timestamp: number) => {
-      const current = simRef.current;
-      if (!current.running) return;
-
-      if (!startTime) startTime = timestamp;
-      const elapsed = timestamp - startTime;
-      const remaining = 1 - startFromProgress;
-      const p = Math.min(1, startFromProgress + (elapsed / EPOCH_DURATION_MS) * remaining);
-
-      setSim(prev => ({ ...prev, progress: p }));
-
-      if (p < 1) {
-        animFrameRef.current = requestAnimationFrame(animate);
-      } else {
-        setSim(prev => ({ ...prev, running: false, progress: 1 }));
-      }
-    };
-
-    animFrameRef.current = requestAnimationFrame(animate);
-  }, [sim]);
-
-  const stopSim = useCallback(() => {
-    cancelAnimationFrame(animFrameRef.current);
-    setSim({ running: false, progress: 1, epochStartPops: {} });
-  }, []);
-
-  // ---- 纪元推进 ----
-
-  const handleAdvanceEpoch = useCallback(async () => {
-    if (state.isSimulating) return;
-    await advanceEpoch();
-  }, [advanceEpoch, state.isSimulating]);
-
-  // 纪元推进完成后自动开始纪元内演化
-  const prevEpoch = useRef(state.epoch);
-  useEffect(() => {
-    if (state.epoch > prevEpoch.current && !state.isSimulating) {
-      prevEpoch.current = state.epoch;
-      // 延迟一帧等 state 更新完
-      setTimeout(() => startEpochSim(), 50);
-    }
-  }, [state.epoch, state.isSimulating, startEpochSim]);
-
-  // ---- 纪元间自动推进 ----
-
-  useEffect(() => { autoAdvanceRef.current = autoAdvance; }, [autoAdvance]);
+  // ---- Play mode toggle ----
 
   useEffect(() => {
-    if (!autoAdvance) return;
-    let stopped = false;
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
 
-    const run = async () => {
-      while (!stopped && autoAdvanceRef.current) {
-        const speciesAlive = Object.values(state.species).filter(s => s.status !== "extinct");
-        if (speciesAlive.length === 0 && state.epoch > 0) {
-          setAutoAdvance(false);
-          break;
-        }
-        // 等待当前纪元内演化完成
-        while (simRef.current.progress < 1 && simRef.current.running && !stopped) {
-          await new Promise(r => setTimeout(r, 100));
-        }
-        if (stopped) break;
-        await advanceEpoch();
-        // 等待纪元内演化
-        await new Promise(r => setTimeout(r, EPOCH_DURATION_MS + 500));
-      }
-    };
-
-    run();
-    return () => { stopped = true; };
-  }, [autoAdvance]);
-
-  // ---- 自动存档 ----
-
-  useEffect(() => {
-    if (state.epoch > 0 && state.epoch % 3 === 0) {
-      saveGame("xenogenesis", 0, state as unknown as Record<string, unknown>, `纪元${state.epoch}`);
+  const handlePlay = useCallback(() => {
+    if (isPlaying) {
+      setIsPlaying(false);
+      return;
     }
-  }, [state.epoch]);
+    setIsPlaying(true);
+    if (!state.isEpochRunning) {
+      startEpoch();
+    }
+  }, [isPlaying, state.isEpochRunning, startEpoch]);
 
-  // ---- 清理 ----
+  // ---- Manual single-epoch advance ----
 
-  useEffect(() => {
-    return () => cancelAnimationFrame(animFrameRef.current);
-  }, []);
+  const handleSingleEpoch = useCallback(() => {
+    if (state.isEpochRunning) return;
+    startEpoch();
+  }, [state.isEpochRunning, startEpoch]);
 
-  // Pixel event: Meteor (disaster added)
+  // ---- Pixel event: Meteor (disaster added) ----
+
+  const prevDisasterLenRef = useRef(0);
   useEffect(() => {
     if (state.disasters && state.disasters.length > prevDisasterLenRef.current) {
       const lastD = state.disasters[state.disasters.length - 1];
@@ -258,7 +111,9 @@ export default function XenogenesisPage() {
     prevDisasterLenRef.current = state.disasters?.length || 0;
   }, [state.disasters?.length]);
 
-  // Pixel event: Evolution (species traits changed via mutation)
+  // ---- Pixel event: Evolution (species traits changed via mutation) ----
+
+  const prevTraitsHashRef = useRef("");
   useEffect(() => {
     const traitsHash = Object.values(state.species)
       .map(s => `${s.id}:${s.traits.specialAbility || ""}`)
@@ -269,7 +124,9 @@ export default function XenogenesisPage() {
     prevTraitsHashRef.current = traitsHash;
   }, [state.species]);
 
-  // Pixel event: Civilization (new civ awakened)
+  // ---- Pixel event: Civilization (new civ awakened) ----
+
+  const prevCivLenRef = useRef(0);
   useEffect(() => {
     if (state.civilizations && state.civilizations.length > prevCivLenRef.current) {
       setPixelEvent({ type: "civilization", duration: 3500 });
@@ -277,7 +134,9 @@ export default function XenogenesisPage() {
     prevCivLenRef.current = state.civilizations?.length || 0;
   }, [state.civilizations?.length]);
 
-  // Pixel event: Extinction (species went extinct)
+  // ---- Pixel event: Extinction (species went extinct) ----
+
+  const prevExtinctCountRef = useRef(0);
   useEffect(() => {
     const extinctCount = Object.values(state.species).filter(s => s.status === "extinct").length;
     if (extinctCount > prevExtinctCountRef.current) {
@@ -286,7 +145,8 @@ export default function XenogenesisPage() {
     prevExtinctCountRef.current = extinctCount;
   }, [state.species]);
 
-  // Pixel event: Balance (3 consecutive epochs without extinction, 3+ species alive)
+  // ---- Pixel event: Balance (3 consecutive epochs without extinction, 3+ species alive) ----
+
   useEffect(() => {
     if (state.epoch >= 3 && state.timeline.length >= 3) {
       const recentEpochs = state.timeline.slice(-3);
@@ -300,10 +160,23 @@ export default function XenogenesisPage() {
     }
   }, [state.epoch]);
 
+  // ---- 自动存档 ----
+
+  useEffect(() => {
+    if (state.epoch > 0 && state.epoch % 3 === 0) {
+      saveGame("xenogenesis", 0, state as unknown as Record<string, unknown>, `纪元${state.epoch}`);
+    }
+  }, [state.epoch]);
+
   // ---- 衍生状态 ----
 
-  const simActive = sim.running || sim.progress < 1;
-  const simProgress = Math.round(sim.progress * 100);
+  const aliveSpecies = Object.values(state.species).filter((s) => s.status !== "extinct");
+  const extinctSpecies = Object.values(state.species).filter((s) => s.status === "extinct");
+  const currentEpoch = state.timeline[state.timeline.length - 1];
+  const simActive = state.isEpochRunning;
+  const simProgress = state.totalTicks > 0
+    ? Math.round((state.currentTick / state.totalTicks) * 100)
+    : 0;
 
   return (
     <div className="flex-1 flex flex-col p-4 max-w-6xl mx-auto w-full gap-4">
@@ -315,7 +188,7 @@ export default function XenogenesisPage() {
           <span className="text-xs text-gray-600 font-mono" title="星球种子码">🌱 {state.seed}</span>
           {simActive && (
             <span className="text-xs text-[#64b5f6] animate-pulse">
-              演化中 {simProgress}%
+              演化中 {simProgress}% (tick {state.currentTick}/{state.totalTicks})
             </span>
           )}
           <div className="flex gap-3 text-xs text-gray-400">
@@ -325,9 +198,21 @@ export default function XenogenesisPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => setShowCreator(!showCreator)}
+          <button onClick={() => setShowMap(!showMap)}
+            className={`text-xs px-3 py-1.5 rounded border transition-colors ${
+              showMap ? "border-[#64b5f6]/40 text-[#64b5f6] bg-[#64b5f6]/10" : "border-[#2a2a4a] text-gray-500"
+            }`}>
+            🗺 地图
+          </button>
+          <button onClick={() => setShowLab(!showLab)}
             className="text-xs px-3 py-1.5 rounded border border-[#64b5f6]/30 text-[#64b5f6] hover:bg-[#64b5f6]/10 transition-colors">
             + 创建物种
+          </button>
+          <button onClick={() => setShowIntervention(!showIntervention)}
+            className={`text-xs px-3 py-1.5 rounded border transition-colors ${
+              showIntervention ? "border-purple-400/40 text-purple-400 bg-purple-400/10" : "border-purple-400/30 text-purple-400 hover:bg-purple-400/10"
+            }`}>
+            ⚡ 干预 ({state.interventionTokens}/{state.maxInterventionTokens})
           </button>
           <button onClick={() => setShowAchievements(!showAchievements)}
             className="text-xs px-3 py-1.5 rounded border border-yellow-400/30 text-yellow-400 hover:bg-yellow-400/10 transition-colors">
@@ -342,42 +227,36 @@ export default function XenogenesisPage() {
 
       <ErrorBanner message={error} />
 
-      {/* 物种创建表单 */}
-      {showCreator && (
-        <div className="bg-[#0d0d24] border border-[#2a2a4a] rounded-xl p-5">
-          <div className="flex gap-4 flex-wrap items-end">
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">物种名</label>
-              <input value={newName} onChange={(e) => setNewName(e.target.value)}
-                className="w-32 px-3 py-1.5 rounded bg-[#0a0a1a] border border-[#2a2a4a] text-sm text-white"
-                placeholder="如：鳞行者" />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 block mb-1">类型</label>
-              <select value={newType} onChange={(e) => setNewType(e.target.value as SpeciesDef["type"])}
-                className="px-3 py-1.5 rounded bg-[#0a0a1a] border border-[#2a2a4a] text-sm text-white">
-                <option value="plant">🌱 植物</option>
-                <option value="herbivore">🐑 草食</option>
-                <option value="carnivore">🐺 肉食</option>
-                <option value="omnivore">🐻 杂食</option>
-                <option value="decomposer">🍄 分解者</option>
-              </select>
-            </div>
-            {(Object.keys(TRAIT_LABELS) as Array<keyof SpeciesTraits>).filter(k => k !== "specialAbility").map((key) => (
-              <div key={key}>
-                <label className="text-xs text-gray-500 block mb-1">{TRAIT_LABELS[key]}</label>
-                <input type="range" min="1" max="10" value={newTraits[key]}
-                  onChange={(e) => setNewTraits((t) => ({ ...t, [key]: Number(e.target.value) }))}
-                  className="w-20" />
-                <span className="text-xs text-gray-400 ml-1">{newTraits[key]}</span>
-              </div>
-            ))}
-            <button onClick={handleCreate}
-              className="px-4 py-1.5 rounded bg-[#64b5f6]/20 border border-[#64b5f6]/40 text-[#64b5f6] text-sm hover:bg-[#64b5f6]/30">
-              投放
-            </button>
-          </div>
-        </div>
+      {/* PlanetMap */}
+      {showMap && state.planetTiles.length > 0 && (
+        <PlanetMap
+          tiles={state.planetTiles}
+          individuals={state.individuals}
+          species={state.species}
+          onTileClick={(tile) => console.log("Tile clicked:", tile)}
+        />
+      )}
+
+      {/* SpeciesLab */}
+      {showLab && (
+        <SpeciesLab
+          lab={state.speciesLab}
+          existingSpecies={state.species}
+          environment={state.environment}
+          onCreateSpecies={addSpecies}
+          onClose={() => setShowLab(false)}
+        />
+      )}
+
+      {/* InterventionPanel */}
+      {showIntervention && (
+        <InterventionPanel
+          tokens={state.interventionTokens}
+          maxTokens={state.maxInterventionTokens}
+          warnings={state.disasterWarnings}
+          onIntervene={useIntervention}
+          onClose={() => setShowIntervention(false)}
+        />
       )}
 
       {/* 成就面板 */}
@@ -418,22 +297,10 @@ export default function XenogenesisPage() {
                   tools: "🔧 工具时代", tribal: "🏘 部落时代", agriculture: "🌾 农业时代",
                   industrial: "🏭 工业时代", information: "💻 信息时代", interstellar: "⭐ 星际文明",
                 };
-                const originalPop = state.species[s.id]?.population ?? s.population;
-                const popDelta = s.population - originalPop;
 
                 return (
                   <GameCard key={s.id} emoji={s.emoji} name={s.name} subtitle={s.type}
-                    meta={`${s.population} 只${simActive && popDelta !== 0 ? (popDelta > 0 ? ` ↑` : ` ↓`) : ""}`}>
-                    {/* 纪元内种群变化条 */}
-                    {simActive && (
-                      <div className="mb-1.5 h-1 bg-[#1a1a2e] rounded-full overflow-hidden">
-                        <div className="h-full rounded-full transition-all duration-100"
-                          style={{
-                            width: `${Math.min(100, (s.population / Math.max(originalPop, 1)) * 100)}%`,
-                            backgroundColor: popDelta >= 0 ? "#64b5f6" : "#ff6644",
-                          }} />
-                      </div>
-                    )}
+                    meta={`${s.population} 只`}>
                     <div className="flex flex-wrap gap-1">
                       {(Object.keys(TRAIT_LABELS) as Array<keyof SpeciesTraits>).map((key) =>
                         s.traits[key] !== undefined && key !== "specialAbility" ? (
@@ -485,8 +352,8 @@ export default function XenogenesisPage() {
                 <PopulationChart
                   timeline={state.timeline}
                   species={state.species}
-                  liveSpecies={displaySpecies}
-                  simActive={simActive && sim.progress < 1}
+                  liveSpecies={state.species}
+                  simActive={simActive}
                 />
               </div>
             </div>
@@ -551,64 +418,53 @@ export default function XenogenesisPage() {
 
       {/* 底部操作栏 */}
       <div className="bg-[#0d0d24] border border-[#2a2a4a] rounded-xl p-4 flex items-center gap-3 flex-wrap">
-        {/* === 纪元内演化控制 === */}
-        <div className="flex items-center gap-1.5 border-r border-[#2a2a4a] pr-3 mr-1">
-          <span className="text-[10px] text-gray-600 mr-1">纪元内</span>
-
-          {!sim.running ? (
-            <button onClick={resumeSim}
-              disabled={sim.progress >= 1 || state.isSimulating}
-              className="px-3 py-1.5 rounded bg-[#64b5f6]/20 border border-[#64b5f6]/40 text-[#64b5f6] text-xs
-                       hover:bg-[#64b5f6]/30 transition-colors disabled:opacity-30 flex items-center gap-1"
-              title="播放纪元内演化">
-              ▶ 播放
-            </button>
-          ) : (
-            <button onClick={pauseSim}
-              className="px-3 py-1.5 rounded bg-yellow-400/20 border border-yellow-400/40 text-yellow-400 text-xs
-                       hover:bg-yellow-400/30 transition-colors flex items-center gap-1"
-              title="暂停纪元内演化">
-              ⏸ 暂停
-            </button>
-          )}
-
-          <button onClick={stopSim}
-            disabled={sim.progress >= 1 && !sim.running}
-            className="px-3 py-1.5 rounded bg-red-400/10 border border-red-400/30 text-red-400 text-xs
-                     hover:bg-red-400/20 transition-colors disabled:opacity-30"
-            title="停止并跳到纪元终点">
-            ⏹ 停止
-          </button>
-        </div>
-
-        {/* === 纪元间推进控制 === */}
+        {/* === 纪元推进控制 === */}
         <div className="flex items-center gap-1.5 border-r border-[#2a2a4a] pr-3 mr-1">
           <span className="text-[10px] text-gray-600 mr-1">纪元推进</span>
 
-          <button onClick={handleAdvanceEpoch}
-            disabled={state.isSimulating}
+          <button onClick={handleSingleEpoch}
+            disabled={state.isEpochRunning}
             className="px-3 py-1.5 rounded bg-[#1a1a2e] border border-[#2a2a4a] text-gray-300 text-xs
                      hover:border-[#4a4a6a] transition-colors disabled:opacity-50"
-            title="手动推进一个纪元">
+            title="推进一个完整纪元（startEpoch → advanceTick × N → endEpoch）">
             ⏭ 单步
           </button>
 
-          {!autoAdvance ? (
-            <button onClick={() => setAutoAdvance(true)}
-              disabled={state.isSimulating}
+          {!isPlaying ? (
+            <button onClick={handlePlay}
+              disabled={state.isEpochRunning && !isPlaying}
               className="px-3 py-1.5 rounded bg-[#64b5f6]/20 border border-[#64b5f6]/40 text-[#64b5f6] text-xs
                        hover:bg-[#64b5f6]/30 transition-colors disabled:opacity-30"
               title="自动连续推进纪元">
-              🔄 自动
+              ▶ 播放
             </button>
           ) : (
-            <button onClick={() => setAutoAdvance(false)}
+            <button onClick={handlePlay}
               className="px-3 py-1.5 rounded bg-yellow-400/20 border border-yellow-400/40 text-yellow-400 text-xs
                        hover:bg-yellow-400/30 transition-colors"
               title="停止自动推进">
-              🔄 停止自动
+              ⏸ 停止
             </button>
           )}
+        </div>
+
+        {/* === 干预 & 创造 === */}
+        <div className="flex items-center gap-1.5 border-r border-[#2a2a4a] pr-3 mr-1">
+          <span className="text-[10px] text-gray-600 mr-1">操作</span>
+
+          <button onClick={() => setShowIntervention(!showIntervention)}
+            className="px-3 py-1.5 rounded bg-purple-400/10 border border-purple-400/30 text-purple-400 text-xs
+                     hover:bg-purple-400/20 transition-colors"
+            title="打开干预面板">
+            ⚡ 干预
+          </button>
+
+          <button onClick={() => setShowLab(!showLab)}
+            className="px-3 py-1.5 rounded bg-[#64b5f6]/10 border border-[#64b5f6]/30 text-[#64b5f6] text-xs
+                     hover:bg-[#64b5f6]/20 transition-colors"
+            title="打开物种实验室">
+            🧬 创建物种
+          </button>
         </div>
 
         {/* === 环境调节 === */}
