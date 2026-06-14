@@ -2,6 +2,11 @@
 
 import { useEffect } from "react";
 
+// Supported event types (21 total):
+// discovery, flashback, item_get, danger, ending,
+// time_reset, causal_ripple, secret, breakthrough, loop_break,
+// meteor, evolution, civilization, extinction, balance,
+// confrontation, anchor, intervention, insight, plague, solar_flare
 export interface PixelEventData {
   type: string;
   duration?: number;
@@ -31,6 +36,12 @@ export function PixelEvent({ event, onDone }: { event: PixelEventData; onDone: (
         {event.type === "civilization" && <CivilizationEffect />}
         {event.type === "extinction" && <ExtinctionEffect />}
         {event.type === "balance" && <BalanceEffect />}
+        {event.type === "confrontation" && <ConfrontationEffect />}
+        {event.type === "anchor" && <AnchorEffect />}
+        {event.type === "intervention" && <InterventionEffect />}
+        {event.type === "insight" && <InsightEffect />}
+        {event.type === "plague" && <PlagueEffect />}
+        {event.type === "solar_flare" && <SolarFlareEffect />}
       </div>
     </div>
   );
@@ -291,6 +302,78 @@ function BalanceEffect() {
         <circle cx="40" cy="22.5" r="4" fill="#64b5f6" />
         <circle cx="40" cy="57.5" r="4" fill="#0a0a1a" />
       </svg>
+    </div>
+  );
+}
+
+function ConfrontationEffect() {
+  return (
+    <div className="w-full h-full flex items-center justify-center relative">
+      <div className="absolute inset-0 bg-red-500/5 animate-pulse" />
+      <div className="absolute inset-0" style={{
+        background: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,0,0,0.03) 2px, rgba(255,0,0,0.03) 4px)",
+      }} />
+      <div className="z-10 flex items-center gap-1">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="w-2 h-8 bg-red-400/60 animate-pulse"
+            style={{ animationDelay: `${i * 200}ms` }} />
+        ))}
+      </div>
+      <span className="z-10 text-red-400 text-sm font-mono tracking-widest ml-2 animate-pulse">对峙</span>
+    </div>
+  );
+}
+
+function AnchorEffect() {
+  return (
+    <div className="w-full h-full flex items-center justify-center">
+      <svg width="80" height="80" viewBox="0 0 80 80">
+        {[0, 1, 2].map((i) => (
+          <circle key={i} cx={25 + i * 15} cy={40} r="8" fill="none" stroke="#ff6b9d" strokeWidth="2"
+            style={{ animation: `scaleIn 0.4s ease-out ${i * 200}ms forwards`, opacity: 0 }} />
+        ))}
+      </svg>
+    </div>
+  );
+}
+
+function InterventionEffect() {
+  return (
+    <div className="w-full h-full flex items-center justify-center">
+      <div className="text-5xl animate-bounce" style={{ filter: "drop-shadow(0 0 20px #ffaa00)" }}>✋</div>
+    </div>
+  );
+}
+
+function InsightEffect() {
+  return (
+    <div className="w-full h-full flex items-center justify-center">
+      <div className="text-4xl animate-pulse" style={{
+        filter: "drop-shadow(0 0 15px #ffcc00)", animation: "scaleIn 0.5s ease-out",
+      }}>💡</div>
+    </div>
+  );
+}
+
+function PlagueEffect() {
+  return (
+    <div className="w-full h-full relative">
+      {Array.from({ length: 20 }).map((_, i) => (
+        <div key={i} className="absolute w-2 h-2 rounded-full bg-green-500/60"
+          style={{
+            left: `${20 + Math.random() * 60}%`, top: `${20 + Math.random() * 60}%`,
+            animation: `rippleOut 2s ease-out ${i * 100}ms infinite`,
+          }} />
+      ))}
+    </div>
+  );
+}
+
+function SolarFlareEffect() {
+  return (
+    <div className="w-full h-full flex items-center justify-center" style={{ animation: "fadeIn 0.1s ease-out" }}>
+      <div className="w-32 h-32 rounded-full bg-yellow-400/20 animate-pulse" style={{ filter: "blur(20px)" }} />
+      <div className="absolute text-yellow-400 text-2xl font-bold animate-pulse">☀</div>
     </div>
   );
 }
