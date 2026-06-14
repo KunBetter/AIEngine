@@ -427,3 +427,81 @@ export interface ArchivedGene {
   specialAbility?: string;
   extinctionCause: string;
 }
+
+// ---- 蝴蝶效应 v2 类型 ----
+
+export interface TimelineNode {
+  id: string;
+  time: number;
+  location: string;
+  npcsPresent: string[];
+  events: string[];
+  isUnlocked: boolean;
+  isCritical: boolean;
+  causalLinks: string[];
+  mysteryStatus: "hidden" | "suspicious" | "revealed";
+}
+
+export interface CausalFragment {
+  id: string;
+  description: string;
+  relatedNPCs: string[];
+  relatedTime: number;
+  relatedLocation: string;
+  hints: string[];
+  isPlaced: boolean;
+  correctPosition?: {
+    parentId?: string;
+    childId?: string;
+  };
+}
+
+export interface AnchoredCausal {
+  causalChainId: string;
+  anchorLevel: number;
+  fragments: string[];
+  effects: {
+    npcMemoryRetained: string[];
+    eventPreShifted: boolean;
+    locationStateChanged: string;
+  };
+}
+
+export interface ButterflyStateV2 extends ButterflyState {
+  actionPoints: number;
+  maxActionPoints: number;
+  timelineNodes: TimelineNode[];
+  causalFragments: CausalFragment[];
+  anchoredCausals: AnchoredCausal[];
+  insightPoints: number;
+  isOverheated: boolean;
+  score?: number;
+  rating?: "S" | "A" | "B" | "C";
+}
+
+export interface NPCStateV2 extends NPCState {
+  memoryAwakening: number;
+  permanentMemories: string[];
+  awakeningStage: "dormant" | "deja_vu" | "aware" | "ally" | "unstable";
+}
+
+export interface ButterflyAIResponseV2 {
+  npcName?: string;
+  dialogue?: string;
+  tone?: string;
+  hasCausalImpact?: boolean;
+  causalNode?: CausalNode;
+  result?: string;
+  causalFragments: CausalFragment[];
+  timelineNodesUnlocked: TimelineNode[];
+  npcMemoryHint?: string;
+  anchoringSuggestion?: {
+    chainDescription: string;
+    fragmentsInvolved: string[];
+    predictedEffect: string;
+  };
+  mysteryProgress: {
+    conditionMet: string[];
+    conditionHint: string[];
+  };
+}
