@@ -20,8 +20,16 @@ export function StatBar({
       <span className="text-xs text-gray-500 w-12 shrink-0">{label}</span>
       <div className={`flex-1 ${h} bg-[#1a1a2e] rounded-full overflow-hidden`}>
         <div
-          className={`${h} rounded-full transition-all duration-700 ease-out`}
-          style={{ width: `${pct}%`, backgroundColor: color, boxShadow: `0 0 6px ${color}` }}
+          className={`h-full rounded-full transition-all duration-700 ease-out ${pct <= 25 ? "animate-pulse" : ""}`}
+          style={{
+            width: `${pct}%`,
+            background:
+              pct > 60
+                ? `linear-gradient(90deg, ${typeof color === "string" ? color : "#44ff44"}, ${typeof color === "string" ? color : "#44ff44"}88)`
+                : pct > 30
+                  ? "linear-gradient(90deg, #ffaa00, #ffaa0088)"
+                  : "linear-gradient(90deg, #ff4444, #ff444488)",
+          }}
         />
       </div>
       <span className="text-xs font-mono w-8 text-right" style={{ color }}>{value}</span>
