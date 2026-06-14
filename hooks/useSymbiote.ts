@@ -1,7 +1,16 @@
 "use client";
 
 import { useReducer, useCallback } from "react";
-import type { SymbioteState, SymbioteAIResponse, SymbioteMessage } from "@/lib/types";
+import type {
+  SymbioteState,
+  SymbioteAIResponse,
+  SymbioteMessage,
+  SymbioteStateV2,
+  EvidenceCard,
+  TrustState,
+  SurvivalState,
+  ConfrontationRound,
+} from "@/lib/types";
 
 const GOALS = [
   "回收远古外星文明遗物",
@@ -44,9 +53,17 @@ type Action =
   | { type: "ADD_DIALOGUE"; payload: SymbioteMessage }
   | { type: "SET_LOADING"; payload: boolean }
   | { type: "SET_ERROR"; payload: string }
-  | { type: "RESET" };
+  | { type: "RESET" }
+  | { type: "ADD_EVIDENCE"; payload: EvidenceCard[] }
+  | { type: "DETECT_CONTRADICTION"; payload: { cardA: string; cardB: string; description: string } }
+  | { type: "UPDATE_TRUST"; payload: Partial<TrustState> }
+  | { type: "UPDATE_SURVIVAL"; payload: Partial<SurvivalState> }
+  | { type: "START_CONFRONTATION" }
+  | { type: "ADD_CONFRONTATION_ROUND"; payload: ConfrontationRound }
+  | { type: "END_CONFRONTATION" }
+  | { type: "MARK_EVIDENCE"; payload: { cardId: string; credibility: number } };
 
-function createInitialState(): SymbioteState {
+function createInitialState(): SymbioteStateV2 {
   return {
     phase: "intro",
     currentLocation: "着陆点",
@@ -66,10 +83,17 @@ function createInitialState(): SymbioteState {
     branchChoice: null,
     flashbacks: [],
     ending: null,
+    // V2 fields
+    evidenceCards: [],
+    trustState: { surfaceTrust: 50, trueTrust: 50, echo7Alertness: 0 },
+    survival: { health: 100, energy: 100, oxygen: 100 },
+    activeConfrontation: false,
+    confrontationHistory: [],
+    echo7Alertness: 0,
   };
 }
 
-function reducer(state: SymbioteState, action: Action): SymbioteState {
+function reducer(state: SymbioteStateV2, action: Action): SymbioteStateV2 {
   switch (action.type) {
     case "SET_SCENE": {
       const r = action.payload;
@@ -143,6 +167,52 @@ function reducer(state: SymbioteState, action: Action): SymbioteState {
       return { ...state, isLoading: action.payload };
     case "SET_ERROR":
       return { ...state, error: action.payload, isLoading: false };
+    case "ADD_EVIDENCE": {
+      const existingIds = new Set(state.evidenceCards.map(c => c.id));
+      const newCards = action.payload.filter(c => !existingIds.has(c.id));
+      if (newCards.length === 0) return state;
+      return {
+        ...state,
+        evidenceCards: [...state.evidenceCards, ...newCards],
+      };
+    }
+    case "DETECT_CONTRADICTION":
+      return {
+        ...state,
+        discoveredClues: [
+          ...state.discoveredClues,
+          `矛盾: ${action.payload.description}`,
+        ],
+      };
+    case "UPDATE_TRUST":
+      return {
+        ...state,
+        trustState: { ...state.trustState, ...action.payload },
+      };
+    case "UPDATE_SURVIVAL": {
+      const survival = { ...state.survival, ...action.payload };
+      const ending = survival.health <= 0 ? "perish" : state.ending;
+      return { ...state, survival, ending };
+    }
+    case "START_CONFRONTATION":
+      return { ...state, activeConfrontation: true };
+    case "ADD_CONFRONTATION_ROUND": {
+      const round = action.payload;
+      const confrontationHistory = [...state.confrontationHistory, round];
+      const ending = round.outcome === "echo7_confesses" ? "exposed" : state.ending;
+      return { ...state, confrontationHistory, ending, activeConfrontation: ending !== "exposed" };
+    }
+    case "END_CONFRONTATION":
+      return { ...state, activeConfrontation: false };
+    case "MARK_EVIDENCE":
+      return {
+        ...state,
+        evidenceCards: state.evidenceCards.map(c =>
+          c.id === action.payload.cardId
+            ? { ...c, credibility: action.payload.credibility }
+            : c
+        ),
+      };
     case "RESET":
       return createInitialState();
     default:
@@ -161,6 +231,17 @@ export function useSymbiote() {
       // 添加玩家对话
       const playerMsg: SymbioteMessage = { role: "player", content: playerAction };
       dispatch({ type: "ADD_DIALOGUE", payload: playerMsg });
+
+      // Apply survival costs
+      const isQuestioning = playerAction.includes("质疑") || playerAction.includes("调查") || playerAction.includes("检查");
+      const energyCost = isQuestioning ? 10 : 3;
+      dispatch({
+        type: "UPDATE_SURVIVAL",
+        payload: {
+          energy: Math.max(0, state.survival.energy - energyCost),
+          oxygen: Math.max(0, state.survival.oxygen - 3),
+        },
+      });
 
       try {
         const res = await fetch("/api/symbiote/action", {
@@ -215,11 +296,26 @@ export function useSymbiote() {
             try {
               const event = JSON.parse(data);
               if (event.type === "state_update") {
-                dispatch({ type: "SET_SCENE", payload: event.data as SymbioteAIResponse });
+                const eventData = event.data;
+                dispatch({ type: "SET_SCENE", payload: eventData as SymbioteAIResponse });
+
+                // Extract evidence cards from response
+                if (eventData.evidenceCards) {
+                  dispatch({ type: "ADD_EVIDENCE", payload: eventData.evidenceCards });
+                }
+
+                // Extract echo7 strategy
+                if (eventData.echo7Strategy) {
+                  dispatch({
+                    type: "UPDATE_TRUST",
+                    payload: { echo7Alertness: eventData.echo7Strategy.alertnessLevel },
+                  });
+                }
+
                 // 添加共生体对话
                 const symMsg: SymbioteMessage = {
                   role: "symbiote",
-                  content: (event.data as SymbioteAIResponse).symbioteAdvice.dialogue,
+                  content: (eventData as SymbioteAIResponse).symbioteAdvice.dialogue,
                 };
                 dispatch({ type: "ADD_DIALOGUE", payload: symMsg as SymbioteMessage });
                 dispatch({ type: "SET_LOADING", payload: false });
@@ -241,15 +337,81 @@ export function useSymbiote() {
     [state]
   );
 
+  const sendConfrontAction = useCallback(async (claim: string, evidenceIds: string[]) => {
+    dispatch({ type: "SET_LOADING", payload: true });
+    try {
+      const res = await fetch("/api/symbiote/confront", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          gameState: {
+            evidenceCards: state.evidenceCards,
+            symbioteGoal: state.symbioteGoal,
+            trustState: state.trustState,
+            confrontationHistory: state.confrontationHistory,
+          },
+          claim,
+          evidenceIds,
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const round: ConfrontationRound = {
+        playerClaim: claim,
+        evidenceUsed: evidenceIds,
+        echo7Response: data.echo7Response?.dialogue || "...",
+        echo7EmotionalState: data.echo7Response?.emotionalState || "defensive",
+        outcome: data.echo7Response?.revealsTruth ? "echo7_confesses" : "echo7_deflects",
+      };
+      dispatch({ type: "ADD_CONFRONTATION_ROUND", payload: round });
+      if (data.echo7Response?.revealsTruth) {
+        // Trigger ending
+        dispatch({ type: "SET_SCENE", payload: { ...data, endingTriggered: "exposed" } as any });
+      }
+    } catch (err) {
+      dispatch({ type: "SET_ERROR", payload: err instanceof Error ? err.message : "对峙失败" });
+    } finally {
+      dispatch({ type: "SET_LOADING", payload: false });
+    }
+  }, [state]);
+
   const resetGame = useCallback(() => {
     dispatch({ type: "RESET" });
+  }, []);
+
+  const connectEvidence = useCallback((cardA: string, cardB: string) => {
+    const card1 = state.evidenceCards.find(c => c.id === cardA);
+    const card2 = state.evidenceCards.find(c => c.id === cardB);
+    if (card1 && card2 && card1.hiddenContradiction && card2.hiddenContradiction) {
+      dispatch({
+        type: "DETECT_CONTRADICTION",
+        payload: { cardA, cardB, description: `"${card1.title}"与"${card2.title}"存在矛盾` },
+      });
+    }
+  }, [state.evidenceCards]);
+
+  const markEvidence = useCallback((cardId: string, credibility: number) => {
+    dispatch({ type: "MARK_EVIDENCE", payload: { cardId, credibility } });
+  }, []);
+
+  const startConfrontation = useCallback(() => {
+    dispatch({ type: "START_CONFRONTATION" });
+  }, []);
+
+  const endConfrontation = useCallback(() => {
+    dispatch({ type: "END_CONFRONTATION" });
   }, []);
 
   return {
     state,
     sendAction,
+    sendConfrontAction,
     resetGame,
-    isLoading: (state as SymbioteState & { isLoading?: boolean }).isLoading || false,
-    error: (state as SymbioteState & { error?: string }).error || "",
+    connectEvidence,
+    markEvidence,
+    startConfrontation,
+    endConfrontation,
+    isLoading: (state as SymbioteStateV2 & { isLoading?: boolean }).isLoading || false,
+    error: (state as SymbioteStateV2 & { error?: string }).error || "",
   };
 }
