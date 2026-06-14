@@ -2,12 +2,12 @@ import { NextRequest } from "next/server";
 import { callAI, extractJSON } from "@/lib/ai-client";
 import { BUTTERFLY_SYSTEM } from "@/lib/prompts/butterfly/system";
 import { buildAllNPCProfiles } from "@/lib/prompts/butterfly/npc-profiles";
-import type { ButterflyState } from "@/lib/types";
+import type { ButterflyStateV2 } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { gameState } = body as { gameState: ButterflyState };
+    const { gameState } = body as { gameState: ButterflyStateV2 };
 
     const npcCtx = buildAllNPCProfiles(gameState.npcs);
     const systemPrompt = [BUTTERFLY_SYSTEM, npcCtx].filter(Boolean).join("\n\n---\n\n");
@@ -16,11 +16,24 @@ export async function POST(req: NextRequest) {
       .map((n) => `- [循环${n.loopNumber}] ${n.action} → 影响: ${n.affectedNPCs.join(", ")} | ${n.consequenceDescription} (强度:${n.magnitude})`)
       .join("\n");
 
+    const anchoredSummary = gameState.anchoredCausals
+      ?.map((a: any) =>
+        `[锚定] 因果链${a.causalChainId}: 碎片数${a.fragments?.length || 0} | NPC记忆保留(${a.effects?.npcMemoryRetained?.join(",") || "无"}) | 事件偏移:${a.effects?.eventPreShifted ? "是" : "否"}`
+      ).join("\n") || "";
+
+    const awakeningSummary = Object.entries(gameState.npcs)
+      .map(([id, npc]: [string, any]) => `- ${npc.name}: 觉醒度${npc.memoryAwakening || 0} (${npc.awakeningStage || "dormant"})`)
+      .join("\n");
+
     const userMessage = `## 场景: 循环开始 — 世界生成
 
 ### 当前循环: 第 ${gameState.loopNumber} 次
 ### 因果图（之前所有循环积累的因果影响）:
 ${causalSummary || "（尚无因果积累，这是初始状态）"}
+${anchoredSummary ? `\n## 已锚定的因果链（这些效果在本次循环中保留）:\n${anchoredSummary}` : ""}
+
+### NPC觉醒状态:
+${awakeningSummary || "（无NPC数据）"}
 
 ### 关键事件
 ${gameState.keyEvent.description}

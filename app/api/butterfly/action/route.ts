@@ -4,13 +4,13 @@ import { BUTTERFLY_SYSTEM } from "@/lib/prompts/butterfly/system";
 import { buildNPCProfile } from "@/lib/prompts/butterfly/npc-profiles";
 import { BUTTERFLY_EXAMPLE } from "@/lib/prompts/butterfly/examples";
 import { createSSEResponse, sseEncoder } from "@/lib/stream-response";
-import type { ButterflyState, NPCState } from "@/lib/types";
+import type { ButterflyStateV2, NPCStateV2 } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { gameState, actionType, targetNPC, playerInput } = body as {
-      gameState: ButterflyState;
+      gameState: ButterflyStateV2;
       actionType: "talk" | "investigate" | "intervene";
       targetNPC?: string;
       playerInput: string;
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     let userMessage = "";
 
     if (actionType === "talk" && targetNPC) {
-      const npc = gameState.npcs[targetNPC];
+      const npc = gameState.npcs[targetNPC] as NPCStateV2;
       userMessage = buildDialogueMessage(gameState, targetNPC, npc, playerInput);
     } else if (actionType === "investigate") {
       userMessage = buildInvestigateMessage(gameState, playerInput);
@@ -73,11 +73,11 @@ export async function POST(req: NextRequest) {
   }
 }
 
-function npcStateString(npc: NPCState): string {
+function npcStateString(npc: NPCStateV2): string {
   return `情绪: ${npc.currentMood} | 位置: ${npc.location} | 今日对话: ${npc.dialogueToday || "未知"}`;
 }
 
-function causalSummary(state: ButterflyState): string {
+function causalSummary(state: ButterflyStateV2): string {
   return state.causalGraph
     .slice(-6)
     .map((n) => `[循环${n.loopNumber}] ${n.action} → ${n.affectedNPCs.join(",")}: ${n.consequenceDescription}`)
@@ -85,9 +85,9 @@ function causalSummary(state: ButterflyState): string {
 }
 
 function buildDialogueMessage(
-  state: ButterflyState,
+  state: ButterflyStateV2,
   npcId: string,
-  npc: NPCState,
+  npc: NPCStateV2,
   playerInput: string
 ): string {
   return `## 场景: NPC对话
@@ -116,11 +116,35 @@ ${playerInput}
   "clues": ["对话中隐含的线索"],
   "followUpTopics": ["玩家可以追问的话题"],
   "dejaVuHint": "NPC不经意流露的既视感（如果有）",
-  "newCausalNode": null
+  "newCausalNode": null,
+  "causalFragments": [
+    {
+      "id": "frag_1",
+      "description": "因果碎片描述（中文，1句话）",
+      "relatedNPCs": ["elias"],
+      "relatedTime": 14,
+      "relatedLocation": "钟楼",
+      "hints": ["指向其他碎片的线索"],
+      "isPlaced": false
+    }
+  ],
+  "timelineNodesUnlocked": [
+    {
+      "id": "tln_14_clocktower",
+      "time": 14,
+      "location": "钟楼",
+      "npcsPresent": ["elias"],
+      "events": ["Elias检查钟楼地基"],
+      "isUnlocked": true,
+      "isCritical": false,
+      "causalLinks": [],
+      "mysteryStatus": "suspicious"
+    }
+  ]
 }`;
 }
 
-function buildInvestigateMessage(state: ButterflyState, playerInput: string): string {
+function buildInvestigateMessage(state: ButterflyStateV2, playerInput: string): string {
   return `## 场景: 玩家调查
 
 ### 当前循环: 第${state.loopNumber}次 | 时间: ${state.timeOfDay}:00 | 地点: ${state.currentLocation}
@@ -143,11 +167,35 @@ ${causalSummary(state)}
     "affectedNPCs": ["相关的NPC"],
     "consequenceDescription": "因果影响描述",
     "magnitude": 3
-  }
+  },
+  "causalFragments": [
+    {
+      "id": "frag_1",
+      "description": "因果碎片描述（中文，1句话）",
+      "relatedNPCs": ["elias"],
+      "relatedTime": 14,
+      "relatedLocation": "钟楼",
+      "hints": ["指向其他碎片的线索"],
+      "isPlaced": false
+    }
+  ],
+  "timelineNodesUnlocked": [
+    {
+      "id": "tln_14_clocktower",
+      "time": 14,
+      "location": "钟楼",
+      "npcsPresent": ["elias"],
+      "events": ["Elias检查钟楼地基"],
+      "isUnlocked": true,
+      "isCritical": false,
+      "causalLinks": [],
+      "mysteryStatus": "suspicious"
+    }
+  ]
 }`;
 }
 
-function buildInterveneMessage(state: ButterflyState, playerInput: string): string {
+function buildInterveneMessage(state: ButterflyStateV2, playerInput: string): string {
   return `## 场景: 玩家干预行动
 
 ### 当前循环: 第${state.loopNumber}次 | 时间: ${state.timeOfDay}:00 | 地点: ${state.currentLocation}
@@ -172,11 +220,35 @@ ${causalSummary(state)}
     "magnitude": 5
   },
   "keyEventProgress": "这个干预对阻止关键事件有帮助吗？",
-  "newClue": "通过干预发现的新信息"
+  "newClue": "通过干预发现的新信息",
+  "causalFragments": [
+    {
+      "id": "frag_1",
+      "description": "因果碎片描述（中文，1句话）",
+      "relatedNPCs": ["elias"],
+      "relatedTime": 14,
+      "relatedLocation": "钟楼",
+      "hints": ["指向其他碎片的线索"],
+      "isPlaced": false
+    }
+  ],
+  "timelineNodesUnlocked": [
+    {
+      "id": "tln_14_clocktower",
+      "time": 14,
+      "location": "钟楼",
+      "npcsPresent": ["elias"],
+      "events": ["Elias检查钟楼地基"],
+      "isUnlocked": true,
+      "isCritical": false,
+      "causalLinks": [],
+      "mysteryStatus": "suspicious"
+    }
+  ]
 }`;
 }
 
-function buildGeneralMessage(state: ButterflyState, playerInput: string): string {
+function buildGeneralMessage(state: ButterflyStateV2, playerInput: string): string {
   return `## 场景: 玩家行动
 
 ### 当前循环: 第${state.loopNumber}次 | 时间: ${state.timeOfDay}:00 | 地点: ${state.currentLocation}
@@ -190,6 +262,30 @@ ${causalSummary(state)}
 {
   "result": "行动结果（中文）",
   "hasCausalImpact": false,
-  "causalNode": null
+  "causalNode": null,
+  "causalFragments": [
+    {
+      "id": "frag_1",
+      "description": "因果碎片描述（中文，1句话）",
+      "relatedNPCs": ["elias"],
+      "relatedTime": 14,
+      "relatedLocation": "钟楼",
+      "hints": ["指向其他碎片的线索"],
+      "isPlaced": false
+    }
+  ],
+  "timelineNodesUnlocked": [
+    {
+      "id": "tln_14_clocktower",
+      "time": 14,
+      "location": "钟楼",
+      "npcsPresent": ["elias"],
+      "events": ["Elias检查钟楼地基"],
+      "isUnlocked": true,
+      "isCritical": false,
+      "causalLinks": [],
+      "mysteryStatus": "suspicious"
+    }
+  ]
 }`;
 }
