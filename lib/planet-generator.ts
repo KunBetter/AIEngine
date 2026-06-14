@@ -28,16 +28,16 @@ export function seedToNumber(seed: string): number {
 /**
  * Simple value noise (approximates Perlin for terrain generation)
  */
-function noise2D(x: number, y: number, rng: () => number): number {
+export function noise2D(x: number, y: number, rng: () => number): number {
   const ix = Math.floor(x);
   const iy = Math.floor(y);
   const fx = x - ix;
   const fy = y - iy;
 
-  const a = hashCell(ix, iy);
-  const b = hashCell(ix + 1, iy);
-  const c = hashCell(ix, iy + 1);
-  const d = hashCell(ix + 1, iy + 1);
+  const a = hashCell(ix, iy, rng);
+  const b = hashCell(ix + 1, iy, rng);
+  const c = hashCell(ix, iy + 1, rng);
+  const d = hashCell(ix + 1, iy + 1, rng);
 
   const sx = fx * fx * (3 - 2 * fx);
   const sy = fy * fy * (3 - 2 * fy);
@@ -47,16 +47,17 @@ function noise2D(x: number, y: number, rng: () => number): number {
   return ab + (cd - ab) * sy;
 }
 
-function hashCell(x: number, y: number): number {
+function hashCell(x: number, y: number, rng: () => number): number {
+  const r = rng();
   let h = Math.abs(x * 374761393 + y * 668265263) % 10000;
   h = ((h << 5) - h) + x * 127 + y * 311;
-  h = ((h << 5) - h) + 0x6d2b79f5;
+  h = ((h << 5) - h) + (r * 1000000);
   h = Math.imul(h ^ (h >>> 15), 1 | h);
   h = (h + Math.imul(h ^ (h >>> 7), 61 | h)) ^ h;
   return ((h ^ (h >>> 14)) >>> 0) / 4294967296;
 }
 
-function determineTerrain(
+export function determineTerrain(
   elevation: number,
   moisture: number,
   temperature: number,
@@ -67,6 +68,7 @@ function determineTerrain(
   if (elevation < waterCoverage / 100 * 0.75) return "coast";
 
   // Land terrain based on elevation, moisture, and temperature
+  if (elevation > 0.75 && temperature > 0.7) return "volcano";
   if (elevation > 0.8) return temperature < 0.3 ? "tundra" : "mountain";
   if (elevation > 0.65) {
     if (temperature > 0.6 && moisture < 0.3) return "desert";
@@ -122,10 +124,10 @@ export function generatePlanet(config: PlanetConfig): PlanetTile[][] {
       // Special features (5% chance)
       let special: PlanetTile["special"] = undefined;
       const specialRoll = rng();
-      if (specialRoll < 0.02 && terrain === "mountain") special = "geothermal";
-      else if (specialRoll < 0.04 && terrain === "forest") special = "fertile";
-      else if (specialRoll < 0.06 && terrain === "desert") special = "toxic";
-      else if (specialRoll < 0.08 && terrain === "tundra") special = "radioactive";
+      if (specialRoll < 0.012 && terrain === "mountain") special = "geothermal";
+      else if (specialRoll < 0.025 && terrain === "forest") special = "fertile";
+      else if (specialRoll < 0.038 && terrain === "desert") special = "toxic";
+      else if (specialRoll < 0.05 && terrain === "tundra") special = "radioactive";
 
       row.push({
         x, y, terrain,
