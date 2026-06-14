@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useButterfly } from "@/hooks/useButterfly";
+import { useButterfly, calculateScore, getRating } from "@/hooks/useButterfly";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { StreamingText } from "@/components/ui/StreamingText";
 import { saveGame } from "@/lib/save-system";
 import { PixelEvent } from "@/components/ui/PixelEvent";
 import type { PixelEventData } from "@/components/ui/PixelEvent";
+import { TimelineBoard } from "@/components/game/TimelineBoard";
+import { CausalCanvas } from "@/components/game/CausalCanvas";
+import { ResourceBar } from "@/components/game/ResourceBar";
 
 const LOCATION_COORDS: Record<string, { x: number; y: number }> = {
   "钟楼": { x: 200, y: 45 },
@@ -29,11 +32,14 @@ const NPC_LABELS: Record<string, string> = {
 };
 
 export default function ButterflyPage() {
-  const { state, startNewLoop, sendAction, newLoop, resetGame, isLoading, error } = useButterfly();
+  const { state, startNewLoop, sendAction, newLoop, resetGame, isLoading, error,
+    anchorChain, placeFragment, connectFragments } = useButterfly();
   const [selectedNPC, setSelectedNPC] = useState<string | null>(null);
   const [playerInput, setPlayerInput] = useState("");
   const [showCausalGraph, setShowCausalGraph] = useState(false);
   const [showJournal, setShowJournal] = useState(false);
+  const [showTimeline, setShowTimeline] = useState(true);
+  const [showCanvas, setShowCanvas] = useState(false);
   const [pixelEvent, setPixelEvent] = useState<PixelEventData | null>(null);
   const chatRef = useRef<HTMLDivElement>(null);
   const prevLoopRef = useRef(state.loopNumber);
@@ -153,6 +159,16 @@ export default function ButterflyPage() {
         </div>
         <div className="flex gap-2">
           <button
+            onClick={() => setShowTimeline(!showTimeline)}
+            className={`text-xs px-3 py-1.5 rounded border transition-colors ${
+              showTimeline
+                ? "border-[#ff6b9d]/40 text-[#ff6b9d] bg-[#ff6b9d]/10"
+                : "border-[#2a2a4a] text-gray-400 hover:text-white"
+            }`}
+          >
+            ⏳ {showTimeline ? "隐藏时间线" : "时间线"}
+          </button>
+          <button
             onClick={() => setShowCausalGraph(!showCausalGraph)}
             className="text-xs px-3 py-1.5 rounded border border-[#ff6b9d]/30 text-[#ff6b9d] hover:bg-[#ff6b9d]/10 transition-colors"
           >
@@ -172,6 +188,15 @@ export default function ButterflyPage() {
           </button>
         </div>
       </div>
+
+      {/* AP 资源栏 */}
+      <ResourceBar
+        resources={[{
+          label: "AP", current: state.actionPoints, max: state.maxActionPoints,
+          color: "#ff6b9d", icon: "🎯", warning: 2
+        }]}
+        compact
+      />
 
       <ErrorBanner message={error} />
 
@@ -195,6 +220,25 @@ export default function ButterflyPage() {
           ))}
         </div>
       </div>
+
+      {/* 时间线面板 */}
+      {showTimeline && (
+        <TimelineBoard
+          nodes={state.timelineNodes}
+          currentTime={state.timeOfDay}
+          actionPoints={state.actionPoints}
+          maxActionPoints={state.maxActionPoints}
+          insightPoints={state.insightPoints}
+          onNodeClick={(node) => {
+            // Jump to that time/location
+            sendAction("investigate", `前往${node.location}（时间${node.time}:00）`);
+          }}
+          onPreviewNode={(node) => {
+            // Show hint about locked node
+            sendAction("investigate", `尝试了解${node.time}:00的${node.location}`);
+          }}
+        />
+      )}
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-0">
         {/* 小镇地图 */}
@@ -471,36 +515,63 @@ export default function ButterflyPage() {
         </div>
       </div>
 
-      {/* 因果网络面板（可折叠） */}
+      {/* 因果网络面板（可折叠）*/}
       {showCausalGraph && (
         <div className="bg-[#0d0d24] border border-[#2a2a4a] rounded-xl p-4">
-          <h3 className="text-xs text-gray-500 mb-3 uppercase tracking-wider">因果网络</h3>
-          {state.causalGraph.length === 0 ? (
-            <p className="text-xs text-gray-600">尚未建立因果连接。每次行动都会产生涟漪。</p>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs text-gray-500 uppercase tracking-wider">因果网络</h3>
+            <button
+              onClick={() => setShowCanvas(!showCanvas)}
+              className={`text-[10px] px-2 py-1 rounded border transition-colors ${
+                showCanvas
+                  ? "border-[#ff6b9d]/40 text-[#ff6b9d] bg-[#ff6b9d]/10"
+                  : "border-[#2a2a4a] text-gray-400 hover:text-white"
+              }`}
+            >
+              {showCanvas ? "📋 列表视图" : "🧩 因果拼图"}
+            </button>
+          </div>
+
+          {showCanvas ? (
+            <CausalCanvas
+              fragments={state.causalFragments}
+              anchoredChains={state.anchoredCausals}
+              onPlaceFragment={placeFragment}
+              onConnectFragments={connectFragments}
+              onAnchorChain={anchorChain}
+              insightPoints={state.insightPoints}
+            />
           ) : (
-            <div className="flex flex-wrap gap-3">
-              {state.causalGraph.map((node) => (
-                <div
-                  key={node.id}
-                  className="px-3 py-2 rounded-lg border border-[#ff6b9d]/10 bg-[#ff6b9d]/5 text-xs"
-                >
-                  <div className="text-[#ff6b9d] mb-1">循环{node.loopNumber} | 强度:{node.magnitude}</div>
-                  <div className="text-gray-400">{node.action}</div>
-                  <div className="text-gray-500 mt-1">→ {node.consequenceDescription}</div>
-                  <div className="flex gap-1 mt-1">
-                    {node.affectedNPCs.map((npc) => (
-                      <span
-                        key={npc}
-                        className="text-[10px] px-1 rounded"
-                        style={{ backgroundColor: NPC_COLORS[npc] + "30", color: NPC_COLORS[npc] }}
-                      >
-                        {npc}
-                      </span>
-                    ))}
-                  </div>
+            <>
+              {/* 原因果图 */}
+              {state.causalGraph.length === 0 ? (
+                <p className="text-xs text-gray-600">尚未建立因果连接。每次行动都会产生涟漪。</p>
+              ) : (
+                <div className="flex flex-wrap gap-3">
+                  {state.causalGraph.map((node) => (
+                    <div
+                      key={node.id}
+                      className="px-3 py-2 rounded-lg border border-[#ff6b9d]/10 bg-[#ff6b9d]/5 text-xs"
+                    >
+                      <div className="text-[#ff6b9d] mb-1">循环{node.loopNumber} | 强度:{node.magnitude}</div>
+                      <div className="text-gray-400">{node.action}</div>
+                      <div className="text-gray-500 mt-1">→ {node.consequenceDescription}</div>
+                      <div className="flex gap-1 mt-1">
+                        {node.affectedNPCs.map((npc) => (
+                          <span
+                            key={npc}
+                            className="text-[10px] px-1 rounded"
+                            style={{ backgroundColor: NPC_COLORS[npc] + "30", color: NPC_COLORS[npc] }}
+                          >
+                            {npc}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
 
           {/* 玩家假设 */}
@@ -579,6 +650,16 @@ export default function ButterflyPage() {
           </div>
         </div>
       )}
+
+      {/* 循环破解评分 */}
+      {state.keyEvent.prevented && (
+        <div className="bg-[#0d0d24] border border-[#ff6b9d]/40 rounded-xl p-4 text-center">
+          <h3 className="text-lg font-bold text-[#ff6b9d] mb-3">🎉 循环破解！</h3>
+          <p className="text-sm text-gray-300">评分: <span className="text-[#ff6b9d] font-bold">{calculateScore(state)}</span></p>
+          <p className="text-sm text-gray-300 mt-1">评级: <span className="text-[#ff6b9d] font-bold">{getRating(calculateScore(state))}</span></p>
+        </div>
+      )}
+
       {pixelEvent && <PixelEvent event={pixelEvent} onDone={() => setPixelEvent(null)} />}
     </div>
   );
