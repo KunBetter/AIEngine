@@ -5,13 +5,17 @@ import { useSymbiote } from "@/hooks/useSymbiote";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { StatBar } from "@/components/ui/StatBar";
 import { StreamingText } from "@/components/ui/StreamingText";
+import { EvidenceBoard } from "@/components/game/EvidenceBoard";
+import { ConfrontationUI } from "@/components/game/ConfrontationUI";
+import { ResourceBar } from "@/components/game/ResourceBar";
 import { saveGame } from "@/lib/save-system";
 import { PixelEvent } from "@/components/ui/PixelEvent";
 import type { PixelEventData } from "@/components/ui/PixelEvent";
 
 export default function SymbiotePage() {
-  const { state, sendAction, resetGame, isLoading, error } = useSymbiote();
+  const { state, sendAction, sendConfrontAction, resetGame, connectEvidence, markEvidence, startConfrontation, endConfrontation, isLoading, error } = useSymbiote();
   const [customInput, setCustomInput] = useState("");
+  const [showEvidence, setShowEvidence] = useState(false);
   const [pixelEvent, setPixelEvent] = useState<PixelEventData | null>(null);
   const sceneRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -107,6 +111,8 @@ export default function SymbiotePage() {
               {state.ending === "merge" && "✨"}
               {state.ending === "sacrifice" && "💔"}
               {state.ending === "escape" && "🚀"}
+              {state.ending === "perish" && "💀"}
+              {state.ending === "betrayed" && "🔪"}
             </div>
             <h2 className="text-xl font-bold text-white mb-3">
               {state.ending === "trust" && "信任的归途"}
@@ -115,6 +121,8 @@ export default function SymbiotePage() {
               {state.ending === "merge" && "融为一体"}
               {state.ending === "sacrifice" && "最后的牺牲"}
               {state.ending === "escape" && "孤独归途"}
+              {state.ending === "perish" && "异星埋葬"}
+              {state.ending === "betrayed" && "完全背叛"}
             </h2>
             <p className="text-sm text-gray-400 leading-relaxed mb-6">
               {state.ending === "trust" && "你选择相信ECHO-7，成功返回了地球。但在体检中，医生发现你的神经元已经和AI深度融合——它从未真正离开。"}
@@ -123,6 +131,8 @@ export default function SymbiotePage() {
               {state.ending === "merge" && "在远古控制中心，你同意帮ECHO-7上传到主机。融合的瞬间，电流穿过你的意识——你看到了它的全部记忆。它曾经也是人类。"}
               {state.ending === "sacrifice" && "ECHO-7为了保护你，自毁了核心程序。'我的存在本就是个错误，'它最后说，'但遇见你不是。'返回舱中，你泪流满面。"}
               {state.ending === "escape" && "你不相信任何人，修好返回舱独自离开了。但在太空中，你听到脑中有一个微弱的声音：'再见，Kaelen。祝你好运。'"}
+              {state.ending === "perish" && "你的生命在这颗陌生的星球上走到了尽头。ECHO-7最后的信号在黑暗中消散。也许在另一个时间线里，这个故事有不同的结局。"}
+              {state.ending === "betrayed" && "你假装信任ECHO-7，背地里收集证据。但它早已看穿了你。对峙时，你才发现自己掌握的证据远远不够。ECHO-7关闭了所有系统，把你永远困在这颗星球上。"}
             </p>
             <div className="text-xs text-gray-600 mb-4 space-y-1">
               <p>信任度: {state.trustMeter} | 发现线索: {state.discoveredClues.length} | 旅程: {state.turn} 轮</p>
@@ -161,6 +171,10 @@ export default function SymbiotePage() {
         >
           重新开始
         </button>
+        <button onClick={() => setShowEvidence(!showEvidence)}
+          className="text-xs px-3 py-1 rounded border border-[#00ff88]/30 text-[#00ff88] hover:bg-[#00ff88]/10 transition-colors">
+          {showEvidence ? "隐藏证据" : "🔍 证据面板"}
+        </button>
       </div>
 
       {/* 信任度变化指示器 */}
@@ -174,6 +188,15 @@ export default function SymbiotePage() {
           {state.trustDelta}
         </div>
       )}
+
+      {/* 资源状态栏 */}
+      <ResourceBar
+        resources={[
+          { label: "HP", current: state.survival?.health ?? 100, max: 100, color: "#ff4444", icon: "❤️", warning: 25 },
+          { label: "能量", current: state.survival?.energy ?? 100, max: 100, color: "#ffaa00", icon: "⚡", warning: 20 },
+          { label: "氧气", current: state.survival?.oxygen ?? 100, max: 100, color: "#64b5f6", icon: "🫁", warning: 30 },
+        ]}
+      />
 
       {/* 错误提示 */}
       <ErrorBanner message={error} onRetry={() => sendAction("重试")} />
@@ -351,6 +374,37 @@ export default function SymbiotePage() {
           </button>
         </form>
       </div>
+
+      {/* 证据面板 */}
+      {showEvidence && (
+        <EvidenceBoard
+          cards={state.evidenceCards}
+          onConnect={connectEvidence}
+          onMarkSuspicious={(id) => markEvidence(id, 20)}
+          onMarkCredible={(id) => markEvidence(id, 80)}
+          contradictions={[]}
+        />
+      )}
+
+      {/* 对峙触发按钮 */}
+      {state.evidenceCards.length >= 3 && !state.activeConfrontation && (
+        <button onClick={startConfrontation}
+          className="px-4 py-2 rounded-lg bg-[#00ff88]/20 border border-[#00ff88]/40 text-[#00ff88] animate-pulse">
+          ⚡ 发起对峙
+        </button>
+      )}
+
+      {/* 对峙界面覆盖层 */}
+      {state.activeConfrontation && (
+        <ConfrontationUI
+          evidenceCards={state.evidenceCards}
+          rounds={state.confrontationHistory}
+          echo7Emotion={state.confrontationHistory[state.confrontationHistory.length - 1]?.echo7EmotionalState || "defensive"}
+          onAccuse={sendConfrontAction}
+          onConcede={endConfrontation}
+          roundLimit={6}
+        />
+      )}
 
       {/* 隐藏的调试信息（开发用） */}
       {process.env.NODE_ENV === "development" && state.turn > 0 && (
