@@ -321,3 +321,109 @@ export interface StreamEvent {
   data?: unknown;
   message?: string;
 }
+
+// ---- 异星造物主 v2 类型 ----
+
+export type TerrainType = "ocean" | "coast" | "forest" | "grassland" | "desert" | "mountain" | "volcano" | "tundra";
+
+export interface PlanetTile {
+  x: number;
+  y: number;
+  terrain: TerrainType;
+  resources: { food: number; water: number; shelter: number };
+  temperatureMod: number;
+  special?: "geothermal" | "fertile" | "toxic" | "radioactive";
+  occupantIds: string[];
+}
+
+export interface SpeciesIndividual {
+  id: string;
+  speciesId: string;
+  x: number;
+  y: number;
+  hunger: number;
+  health: number;
+  age: number;
+  state: BehaviorState;
+}
+
+export type BehaviorState =
+  | "idle"
+  | "foraging"
+  | "hunting"
+  | "fleeing"
+  | "mating"
+  | "resting"
+  | "migrating"
+  | "dying";
+
+export interface TickResult {
+  tick: number;
+  individuals: SpeciesIndividual[];
+  events: TickEvent[];
+  populationChanges: Record<string, number>;
+  extinctions: string[];
+}
+
+export interface TickEvent {
+  type: "predation" | "birth" | "death" | "mutation" | "migration" | "starvation" | "disaster";
+  description: string;
+  speciesId?: string;
+  individualId?: string;
+  location?: { x: number; y: number };
+}
+
+export interface InterventionAction {
+  id: string;
+  label: string;
+  description: string;
+  cost: number;
+  targetType: "species" | "tile" | "global";
+  apply: (state: XenogenesisStateV2) => XenogenesisStateV2;
+}
+
+export interface XenogenesisStateV2 extends XenogenesisState {
+  planetTiles: PlanetTile[][];
+  individuals: SpeciesIndividual[];
+  interventionTokens: number;
+  maxInterventionTokens: number;
+  disasterWarnings: DisasterWarning[];
+  speciesLab: SpeciesLabState;
+  isEpochRunning: boolean;
+  currentTick: number;
+  totalTicks: number;
+}
+
+export interface DisasterWarning {
+  type: "meteor" | "ice_age" | "plague" | "solar_flare";
+  probability: number;
+  description: string;
+  suggestion: string;
+}
+
+export interface SpeciesLabState {
+  candidates: SpeciesDesign[];
+  bioEnergy: number;
+  maxBioEnergy: number;
+  bioEnergyRegen: number;
+  geneBank: ArchivedGene[];
+}
+
+export interface SpeciesDesign {
+  name: string;
+  type: SpeciesDef["type"];
+  traits: SpeciesTraits;
+  predictedScore: number;
+  foodChainPosition: number;
+  synergyWithExisting: string[];
+  riskFactors: string[];
+}
+
+export interface ArchivedGene {
+  id: string;
+  speciesName: string;
+  epochExtinct: number;
+  traits: SpeciesTraits;
+  specialAbility?: string;
+  extinctionCause: string;
+}
