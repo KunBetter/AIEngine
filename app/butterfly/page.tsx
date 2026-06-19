@@ -11,6 +11,7 @@ import { TimelineBoard } from "@/components/game/TimelineBoard";
 import { CausalCanvas } from "@/components/game/CausalCanvas";
 import { ResourceBar } from "@/components/game/ResourceBar";
 import { TownMap } from "@/components/game/TownMap";
+import { LoopGoalBanner } from "@/components/game/LoopGoalBanner";
 
 const NPC_COLORS: Record<string, string> = {
   elias: "#ffcc00", rose: "#ff6b9d", marcus: "#64b5f6",
@@ -33,6 +34,7 @@ export default function ButterflyPage() {
   const [showTimeline, setShowTimeline] = useState(true);
   const [showCanvas, setShowCanvas] = useState(false);
   const [pixelEvent, setPixelEvent] = useState<PixelEventData | null>(null);
+  const [loopGoal, setLoopGoal] = useState("");
   const chatRef = useRef<HTMLDivElement>(null);
   const prevLoopRef = useRef(state.loopNumber);
   const prevCausalLenRef = useRef(0);
@@ -177,37 +179,17 @@ export default function ButterflyPage() {
         </div>
       </div>
 
-      {/* AP 资源栏 */}
-      <ResourceBar
-        resources={[{
-          label: "AP", current: state.actionPoints, max: state.maxActionPoints,
-          color: "#ff6b9d", icon: "🎯", warning: 2
-        }]}
-        compact
-      />
-
       <ErrorBanner message={error} />
 
-      {/* 关键事件提示 */}
-      <div className="bg-[#ff6b9d]/5 border border-[#ff6b9d]/20 rounded-lg p-3 text-sm text-[#ff6b9d]/80">
-        {state.activeMystery === "tower" && "🏚 "}
-        {state.activeMystery === "plague" && "🦠 "}
-        {state.activeMystery === "invasion" && "👥 "}
-        <span className="font-bold">
-          {state.activeMystery === "tower" && "钟楼倒塌"}
-          {state.activeMystery === "plague" && "诡异瘟疫"}
-          {state.activeMystery === "invasion" && "外来者入侵"}
-        </span>
-        <span className="mx-2">—</span>
-        {state.keyEvent.description}
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {state.keyEvent.requiredConditions.map((c, i) => (
-            <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-[#ff6b9d]/10 text-[#ff6b9d]/60">
-              {c.includes("✓") ? c : "☐ " + c}
-            </span>
-          ))}
-        </div>
-      </div>
+      {/* 关键事件与循环目标 */}
+      <LoopGoalBanner
+        activeMystery={state.activeMystery}
+        keyEvent={state.keyEvent}
+        actionPoints={state.actionPoints}
+        maxActionPoints={state.maxActionPoints}
+        loopGoal={loopGoal}
+        loopNumber={state.loopNumber}
+      />
 
       {/* 时间线面板 */}
       {showTimeline && (
