@@ -11,6 +11,7 @@ import { PixelEvent } from "@/components/ui/PixelEvent";
 import type { PixelEventData } from "@/components/ui/PixelEvent";
 import { playEventSound } from "@/lib/audio";
 import { PlanetMap } from "@/components/game/PlanetMap";
+import { SpeciesNetwork } from "@/components/game/SpeciesNetwork";
 import { SpeciesLab } from "@/components/game/SpeciesLab";
 import { InterventionPanel } from "@/components/game/InterventionPanel";
 import { TICKS_PER_EPOCH } from "@/lib/behavior-engine";
@@ -38,6 +39,7 @@ export default function XenogenesisPage() {
   const [showLab, setShowLab] = useState(false);
   const [showIntervention, setShowIntervention] = useState(false);
   const [showMap, setShowMap] = useState(true);
+  const [showNetwork, setShowNetwork] = useState(false);
 
   // Play mode: auto-advances ticks and starts new epochs
   const [isPlaying, setIsPlaying] = useState(false);
@@ -227,6 +229,12 @@ export default function XenogenesisPage() {
             }`}>
             🗺 地图
           </button>
+          <button onClick={() => setShowNetwork(!showNetwork)}
+            className={`text-xs px-3 py-1.5 rounded border transition-colors ${
+              showNetwork ? "border-[#00ff88]/40 text-[#00ff88] bg-[#00ff88]/10" : "border-[#2a2a4a] text-gray-500"
+            }`}>
+            🕸 关系网
+          </button>
           <button onClick={() => setShowLab(!showLab)}
             className="text-xs px-3 py-1.5 rounded border border-[#64b5f6]/30 text-[#64b5f6] hover:bg-[#64b5f6]/10 transition-colors">
             + 创建物种
@@ -257,6 +265,14 @@ export default function XenogenesisPage() {
           individuals={state.individuals}
           species={state.species}
           onTileClick={(tile) => console.log("Tile clicked:", tile)}
+        />
+      )}
+
+      {/* SpeciesNetwork */}
+      {showNetwork && state.timeline.length > 0 && (
+        <SpeciesNetwork
+          species={state.species}
+          interactions={state.timeline[state.timeline.length - 1]?.interactions || []}
         />
       )}
 
