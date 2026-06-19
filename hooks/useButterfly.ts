@@ -240,6 +240,7 @@ function reducer(state: ButterflyStateV2, action: Action): ButterflyStateV2 {
         timeOfDay: 7,
         currentLocation: "广场",
         dialogueMessages: [],
+        gamePhase: state.gamePhase === "intro" ? "investigating" : state.gamePhase,
         // Reset AP for the new loop
         actionPoints: state.maxActionPoints,
       };

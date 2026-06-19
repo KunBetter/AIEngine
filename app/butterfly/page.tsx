@@ -278,7 +278,7 @@ export default function ButterflyPage() {
             ref={chatRef}
             className="flex-1 bg-[#0d0d24] border border-[#2a2a4a] rounded-xl p-4 overflow-y-auto min-h-[200px]"
           >
-            {state.loopNumber === 1 && state.timeOfDay === 7 && state.dialogueMessages.length === 0 ? (
+            {state.gamePhase === "intro" ? (
               <div className="flex items-center justify-center h-full">
                 <div className="text-center">
                   <h2 className="text-lg font-bold text-[#ff6b9d] mb-3">🦋 蝴蝶效应</h2>
@@ -334,7 +334,7 @@ export default function ButterflyPage() {
           </div>
 
           {/* 输入面板 */}
-          {state.timeOfDay >= 7 && state.dialogueMessages.length > 0 && (
+          {state.gamePhase !== "intro" && (
             <div className="bg-[#0d0d24] border border-[#2a2a4a] rounded-xl p-4">
               {selectedNPC ? (
                 <div>

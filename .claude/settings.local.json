@@ -32,7 +32,9 @@
       "Bash(gh repo *)",
       "WebFetch(domain:github.com)",
       "Bash(curl *)",
-      "Bash(python3 *)"
+      "Bash(python3 *)",
+      "Bash(npm run *)",
+      "Bash(open *)"
     ]
   }
 }
