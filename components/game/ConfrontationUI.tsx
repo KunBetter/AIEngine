@@ -30,15 +30,10 @@ export function ConfrontationUI({
     setSelectedEvidence(prev => prev.includes(cardId) ? prev.filter(id => id !== cardId) : [...prev, cardId]);
   };
 
-  const emotionDisplay: Record<string, string> = {
-    defensive: "🛡️ ECHO-7 处于防御状态",
-    cornered: "😰 ECHO-7 感到被逼入绝境",
-    confessing: "💔 ECHO-7 开始坦白",
-    defiant: "😤 ECHO-7 拒不承认",
-  };
 
   return (
-    <div className="fixed inset-0 z-50 flex bg-black/80">
+    <div className="fixed inset-0 z-50 flex bg-black/80 animate-fade-in"
+      style={{ animation: "scaleIn 0.3s ease-out" }}>
       <div className="flex flex-1 max-w-6xl mx-auto">
         {/* Evidence sidebar */}
         <div className="w-56 bg-[#0d0d24] border-r border-[#2a2a4a] p-3 overflow-y-auto">
@@ -60,9 +55,69 @@ export function ConfrontationUI({
 
         {/* Main area */}
         <div className="flex-1 flex flex-col p-6">
-          <div className="text-center mb-4">
-            <span className="text-sm text-[#00ff88]/80 animate-pulse">{emotionDisplay[echo7Emotion] || "🔴 对峙中"}</span>
-            <span className="text-xs text-gray-600 ml-3">剩余回合: {remainingRounds}</span>
+          {/* Tension meter */}
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] text-gray-500 uppercase tracking-wider">对峙紧张度</span>
+              <span className="text-[10px] text-red-400">{rounds.length}/{roundLimit}</span>
+            </div>
+            <div className="h-2 bg-[#1a1a2e] rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-[#ff4444]/60 via-[#ff4444] to-red-500 rounded-full transition-all duration-700"
+                style={{ width: `${(rounds.length / roundLimit) * 100}%` }} />
+            </div>
+          </div>
+
+          {/* Round tracker */}
+          <div className="flex items-center gap-2 mb-4 justify-center">
+            {Array.from({ length: roundLimit }).map((_, i) => {
+              const round = rounds[i];
+              const isDone = !!round;
+              const isCurrent = i === rounds.length;
+              const outcome = round?.outcome;
+              const dotColor = !isDone ? "#1a1a2e"
+                : outcome === "player_advances" ? "#00ff88"
+                : outcome === "echo7_confesses" ? "#ffcc00"
+                : outcome === "echo7_deflects" ? "#ff4444"
+                : outcome === "stalemate" ? "#888888"
+                : "#ffaa00";
+              return (
+                <div key={i} className="flex flex-col items-center gap-1">
+                  <div className="w-3 h-3 rounded-full transition-all duration-300"
+                    style={{
+                      backgroundColor: dotColor,
+                      boxShadow: isCurrent ? `0 0 8px ${dotColor}` : undefined,
+                      transform: isCurrent ? "scale(1.5)" : "scale(1)",
+                    }} />
+                  <span className="text-[8px] text-gray-600">{i + 1}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* ECHO-7 情绪状态 + remaining rounds */}
+          <div className="flex items-center justify-center gap-3 mb-4">
+            {echo7Emotion && (
+              <div className={`text-xs px-3 py-1 rounded-full inline-flex items-center gap-1.5 ${
+                echo7Emotion === "defensive" ? "bg-orange-400/10 text-orange-400 border border-orange-400/20" :
+                echo7Emotion === "cornered" ? "bg-red-400/10 text-red-400 border border-red-400/20 animate-pulse" :
+                echo7Emotion === "confessing" ? "bg-yellow-400/10 text-yellow-400 border border-yellow-400/20" :
+                "bg-blue-400/10 text-blue-400 border border-blue-400/20"
+              }`}>
+                <span className="text-base">
+                  {echo7Emotion === "defensive" ? "🛡" :
+                   echo7Emotion === "cornered" ? "😰" :
+                   echo7Emotion === "confessing" ? "😔" :
+                   "😤"}
+                </span>
+                <span>
+                  {echo7Emotion === "defensive" ? "防守中" :
+                   echo7Emotion === "cornered" ? "被逼入绝境" :
+                   echo7Emotion === "confessing" ? "坦白中" :
+                   "挑衅中"}
+                </span>
+              </div>
+            )}
+            <span className="text-[10px] text-gray-600">剩余回合: {remainingRounds}</span>
           </div>
 
           {/* Rounds history */}
