@@ -186,7 +186,8 @@ type Action =
   | { type: "ANCHOR_CHAIN"; payload: { fragmentIds: string[] } }
   | { type: "CONNECT_FRAGMENTS"; payload: { fromId: string; toId: string } };
 
-const mystery = (["tower", "plague", "invasion"] as const)[Math.floor(Math.random() * 3)];
+// Use fixed initial mystery for SSR stability; RESET action randomizes on client
+const initialMystery = "tower" as const;
 
 const initialState: ButterflyStateV2 = {
   loopNumber: 1,
@@ -197,11 +198,11 @@ const initialState: ButterflyStateV2 = {
     Object.keys(BASE_NPCS).map((k) => [k, createInitialNPCState(k)]),
   ),
   playerJournal: [],
-  keyEvent: MYSTERY_KEY_EVENTS[mystery],
+  keyEvent: MYSTERY_KEY_EVENTS[initialMystery],
   gamePhase: "intro",
   activeDialogue: null,
   dialogueMessages: [],
-  activeMystery: mystery,
+  activeMystery: initialMystery,
   hypotheses: [],
   // ---- V2 fields ----
   actionPoints: 8,
