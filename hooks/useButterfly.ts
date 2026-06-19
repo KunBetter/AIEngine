@@ -308,11 +308,14 @@ function reducer(state: ButterflyStateV2, action: Action): ButterflyStateV2 {
       return { ...state, actionPoints: newAP };
     }
 
-    case "ADD_FRAGMENTS":
+    case "ADD_FRAGMENTS": {
+      const existingIds = new Set(state.causalFragments.map((f) => f.id));
+      const newFrags = action.payload.filter((f) => !existingIds.has(f.id));
       return {
         ...state,
-        causalFragments: [...state.causalFragments, ...action.payload],
+        causalFragments: [...state.causalFragments, ...newFrags],
       };
+    }
 
     case "PLACE_FRAGMENT":
       return {
@@ -325,11 +328,14 @@ function reducer(state: ButterflyStateV2, action: Action): ButterflyStateV2 {
     case "ADD_INSIGHT":
       return { ...state, insightPoints: state.insightPoints + action.payload };
 
-    case "UNLOCK_TIMELINE_NODES":
+    case "UNLOCK_TIMELINE_NODES": {
+      const existingIds = new Set(state.timelineNodes.map((n) => n.id));
+      const newNodes = action.payload.filter((n) => !existingIds.has(n.id));
       return {
         ...state,
-        timelineNodes: [...state.timelineNodes, ...action.payload],
+        timelineNodes: [...state.timelineNodes, ...newNodes],
       };
+    }
 
     case "ANCHOR_CHAIN": {
       const cost = Math.pow(2, state.anchoredCausals.length);
