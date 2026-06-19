@@ -38,6 +38,15 @@ export async function POST(req: NextRequest) {
     const readable = new ReadableStream({
       async start(controller) {
         try {
+          // Phase 1: Send NPC state change immediately
+          if (actionType === "talk" && targetNPC) {
+            const npc = gameState.npcs[targetNPC];
+            controller.enqueue(encoder.encode({
+              type: "npc_state_change",
+              data: { npcId: targetNPC, mood: "回应中...", tone: "neutral" },
+            }));
+          }
+
           await callAIStream(
             systemPrompt,
             userMessage,
@@ -51,6 +60,22 @@ export async function POST(req: NextRequest) {
           const jsonStr = extractJSON(fullText);
           try {
             const parsed = JSON.parse(jsonStr);
+            // Emit causal fragments immediately if present
+            if (parsed.causalFragments?.length > 0) {
+              controller.enqueue(encoder.encode({
+                type: "causal_fragment",
+                data: { fragments: parsed.causalFragments },
+              }));
+            }
+
+            // Emit timeline updates immediately if present
+            if (parsed.timelineNodesUnlocked?.length > 0) {
+              controller.enqueue(encoder.encode({
+                type: "timeline_update",
+                data: { nodes: parsed.timelineNodesUnlocked },
+              }));
+            }
+
             controller.enqueue(encoder.encode({ type: "state_update", data: parsed }));
           } catch {
             controller.enqueue(encoder.encode({ type: "error", message: "AI响应解析失败" }));
