@@ -9,6 +9,7 @@ import { GameCard } from "@/components/ui/GameCard";
 import { saveGame } from "@/lib/save-system";
 import { PixelEvent } from "@/components/ui/PixelEvent";
 import type { PixelEventData } from "@/components/ui/PixelEvent";
+import { playEventSound } from "@/lib/audio";
 import { PlanetMap } from "@/components/game/PlanetMap";
 import { SpeciesLab } from "@/components/game/SpeciesLab";
 import { InterventionPanel } from "@/components/game/InterventionPanel";
@@ -105,8 +106,8 @@ export default function XenogenesisPage() {
   useEffect(() => {
     if (state.disasters && state.disasters.length > prevDisasterLenRef.current) {
       const lastD = state.disasters[state.disasters.length - 1];
-      if (lastD?.type === "meteor") setPixelEvent({ type: "meteor" });
-      else if (lastD?.type) setPixelEvent({ type: "meteor" });
+      if (lastD?.type === "meteor") { setPixelEvent({ type: "meteor" }); playEventSound("loop_reset"); }
+      else if (lastD?.type) { setPixelEvent({ type: "meteor" }); playEventSound("loop_reset"); }
     }
     prevDisasterLenRef.current = state.disasters?.length || 0;
   }, [state.disasters?.length]);
@@ -120,6 +121,7 @@ export default function XenogenesisPage() {
       .join(",");
     if (prevTraitsHashRef.current && traitsHash !== prevTraitsHashRef.current) {
       setPixelEvent({ type: "evolution" });
+      playEventSound("breakthrough");
     }
     prevTraitsHashRef.current = traitsHash;
   }, [state.species]);
@@ -130,6 +132,7 @@ export default function XenogenesisPage() {
   useEffect(() => {
     if (state.civilizations && state.civilizations.length > prevCivLenRef.current) {
       setPixelEvent({ type: "civilization", duration: 3500 });
+      playEventSound("breakthrough");
     }
     prevCivLenRef.current = state.civilizations?.length || 0;
   }, [state.civilizations?.length]);
@@ -141,9 +144,21 @@ export default function XenogenesisPage() {
     const extinctCount = Object.values(state.species).filter(s => s.status === "extinct").length;
     if (extinctCount > prevExtinctCountRef.current) {
       setPixelEvent({ type: "extinction", duration: 3000 });
+      playEventSound("loop_reset");
     }
     prevExtinctCountRef.current = extinctCount;
   }, [state.species]);
+
+  // First species created effect
+  const prevSpeciesCountRef = useRef(0);
+  useEffect(() => {
+    const count = Object.keys(state.species).length;
+    if (count > prevSpeciesCountRef.current && prevSpeciesCountRef.current === 0) {
+      setPixelEvent({ type: "evolution", duration: 3000 });
+      playEventSound("breakthrough");
+    }
+    prevSpeciesCountRef.current = count;
+  }, [Object.keys(state.species).length]);
 
   // ---- Pixel event: Balance (3 consecutive epochs without extinction, 3+ species alive) ----
 
@@ -157,6 +172,14 @@ export default function XenogenesisPage() {
       if (noExtinction && aliveCount >= 3) {
         setPixelEvent({ type: "balance", duration: 3500 });
       }
+    }
+  }, [state.epoch]);
+
+  // Epoch milestone effect
+  useEffect(() => {
+    if (state.epoch > 0 && state.epoch % 5 === 0) {
+      setPixelEvent({ type: "civilization", duration: 3000 });
+      playEventSound("breakthrough");
     }
   }, [state.epoch]);
 

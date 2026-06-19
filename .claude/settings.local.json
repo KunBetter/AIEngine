@@ -31,7 +31,8 @@
       "Bash(ssh *)",
       "Bash(gh repo *)",
       "WebFetch(domain:github.com)",
-      "Bash(curl *)"
+      "Bash(curl *)",
+      "Bash(python3 *)"
     ]
   }
 }
