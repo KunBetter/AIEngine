@@ -1,6 +1,6 @@
 "use client";
 
-import { useReducer, useCallback } from "react";
+import { useReducer, useCallback, useState } from "react";
 import type {
   XenogenesisStateV2,
   SpeciesDesign,
@@ -461,6 +461,9 @@ function reducer(
 export function useXenogenesisV2() {
   const [state, dispatch] = useReducer(reducer, null, createInitialState);
 
+  // Pre-cached hints for the upcoming epoch (from AI predictions)
+  const [nextEpochHints, setNextEpochHints] = useState<string[]>([]);
+
   // Advance one tick of the behavior engine.
   const advanceTick = useCallback(() => {
     if (!state.isEpochRunning) return;
@@ -506,6 +509,10 @@ export function useXenogenesisV2() {
         if (res.ok) {
           const data = await res.json();
           narrative = data.narrative || narrative;
+          // Pre-cache AI predictions for the next epoch
+          if (data.predictions) {
+            setNextEpochHints(data.predictions);
+          }
         }
       } catch {
         // Fall back to default narrative
@@ -673,6 +680,7 @@ export function useXenogenesisV2() {
     useIntervention,
     updateEnvironment,
     resetGame,
+    nextEpochHints,
     error: (state as XenogenesisStateV2 & { error?: string }).error || "",
   };
 }

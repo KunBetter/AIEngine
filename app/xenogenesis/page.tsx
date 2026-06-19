@@ -41,6 +41,9 @@ export default function XenogenesisPage() {
   const [showMap, setShowMap] = useState(true);
   const [showNetwork, setShowNetwork] = useState(false);
 
+  // Intervention feedback toast
+  const [interventionResult, setInterventionResult] = useState<string | null>(null);
+
   // Play mode: auto-advances ticks and starts new epochs
   const [isPlaying, setIsPlaying] = useState(false);
   const isPlayingRef = useRef(false);
@@ -83,6 +86,42 @@ export default function XenogenesisPage() {
   useEffect(() => {
     isPlayingRef.current = isPlaying;
   }, [isPlaying]);
+
+  // Auto-dismiss intervention feedback toast
+  useEffect(() => {
+    if (interventionResult) {
+      const timer = setTimeout(() => setInterventionResult(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [interventionResult]);
+
+  // Wrapped intervention handler with feedback
+  const handleIntervene = useCallback(
+    (actionId: string) => {
+      const feedbackLabels: Record<string, string> = {
+        warm_climate: "气候变暖已生效 — 全球温度上升2°C",
+        cool_climate: "气候降温已生效 — 全球温度下降2°C",
+        boost_oxygen: "增氧已生效 — 大气氧气浓度提升3%",
+        terraform_forest: "造林已生效 — 部分地形转化为森林",
+        mass_breeding: "促进繁殖已生效 — 所有物种种群增长20%",
+        genetic_stabilize: "基因稳定已生效 — 濒危物种状态恢复",
+        meteor_shield: "陨石护盾已激活 — 陨石撞击风险大幅降低",
+        plague_cure: "瘟疫解药已投放 — 受影响物种恢复健康",
+        mutate: "催化突变已生效 — 选中物种获得随机突变",
+        smite: "天罚已降临 — 目标区域触发小范围灾难",
+        bless: "祝福之地已施加 — 目标区域资源翻倍",
+        gene_edit: "基因编辑已生效 — 物种特征已微调",
+        protect: "神圣保护已施加 — 标记物种本纪元免于灭绝",
+        env_tweak: "环境微调已生效 — 全球参数已调整",
+        extinction: "灭绝令已执行 — 目标物种已被移除",
+        accelerate: "加速演化已激活 — 本纪元双倍tick进行中",
+      };
+      useIntervention(actionId);
+      setInterventionResult(feedbackLabels[actionId] || `干预 "${actionId}" 已生效`);
+      setShowIntervention(false);
+    },
+    [useIntervention],
+  );
 
   const handlePlay = useCallback(() => {
     if (isPlaying) {
@@ -212,9 +251,16 @@ export default function XenogenesisPage() {
           <span className="text-sm text-gray-500">第 {state.epoch} 纪元</span>
           <span className="text-xs text-gray-600 font-mono" title="星球种子码">🌱 {state.seed}</span>
           {simActive && (
-            <span className="text-xs text-[#64b5f6] animate-pulse">
-              演化中 {simProgress}% (tick {state.currentTick}/{state.totalTicks})
-            </span>
+            <div className="bg-[#0d0d24] border border-[#2a2a4a] rounded-lg p-2 flex items-center gap-2 text-xs">
+              <span className="text-[#64b5f6] animate-pulse">⏳ 演化中</span>
+              <div className="flex-1 h-1 bg-[#1a1a2e] rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-[#64b5f6] rounded-full transition-all duration-100"
+                  style={{ width: `${simProgress}%` }}
+                />
+              </div>
+              <span className="text-gray-500">{simProgress}%</span>
+            </div>
           )}
           <div className="flex gap-3 text-xs text-gray-400">
             <span>🌡 {state.environment.temperature}°C</span>
@@ -258,6 +304,13 @@ export default function XenogenesisPage() {
 
       <ErrorBanner message={error} />
 
+      {/* Intervention feedback toast */}
+      {interventionResult && (
+        <div className="bg-purple-400/10 border border-purple-400/30 rounded-lg p-3 text-sm text-purple-400 animate-fade-in text-center">
+          {interventionResult}
+        </div>
+      )}
+
       {/* PlanetMap */}
       {showMap && state.planetTiles.length > 0 && (
         <PlanetMap
@@ -293,7 +346,7 @@ export default function XenogenesisPage() {
           tokens={state.interventionTokens}
           maxTokens={state.maxInterventionTokens}
           warnings={state.disasterWarnings}
-          onIntervene={useIntervention}
+          onIntervene={handleIntervene}
           onClose={() => setShowIntervention(false)}
         />
       )}
