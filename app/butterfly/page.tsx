@@ -16,6 +16,7 @@ import { TownMap } from "@/components/game/TownMap";
 import { LoopGoalBanner } from "@/components/game/LoopGoalBanner";
 import { LoopSummary } from "@/components/game/LoopSummary";
 import { NPCRelationRadar } from "@/components/game/NPCRelationRadar";
+import { QuickActions, type QuickAction } from "@/components/game/QuickActions";
 
 const NPC_COLORS: Record<string, string> = {
   elias: "#ffcc00", rose: "#ff6b9d", marcus: "#64b5f6",
@@ -27,6 +28,12 @@ const NPC_LABELS: Record<string, string> = {
   marcus: "医生 Marcus", brooks: "警长 Brooks",
   vera: "图书管理员 Vera", sam: "流浪汉 Old Sam",
 };
+
+const defaultQuickActions: QuickAction[] = [
+  { id: "look", label: "仔细观察", icon: "🔍", action: "仔细观察周围环境", apCost: 1 },
+  { id: "search", label: "搜索物品", icon: "🔎", action: "搜索可能有用的物品", apCost: 2 },
+  { id: "ask", label: "询问路人", icon: "💬", action: "询问附近的人了解情况", apCost: 1 },
+];
 
 export default function ButterflyPage() {
   const { state, startNewLoop, sendAction, newLoop, resetGame, isLoading, error,
@@ -382,7 +389,14 @@ export default function ButterflyPage() {
                 </div>
               ) : (
                 <div>
-                  <p className="text-xs text-gray-500 mb-2">点击地图上的NPC进行对话，或自由行动：</p>
+                  <QuickActions
+                    actions={defaultQuickActions}
+                    disabled={isLoading}
+                    onAction={(action) => {
+                      setPlayerInput(action);
+                    }}
+                  />
+                  <p className="text-xs text-gray-500 mb-2 mt-2">点击地图上的NPC进行对话，或自由行动：</p>
                   <form
                     onSubmit={(e) => {
                       e.preventDefault();
