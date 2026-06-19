@@ -179,13 +179,13 @@ export default function SymbiotePage() {
 
       {/* 信任度变化指示器 */}
       {state.trustDelta !== undefined && state.trustDelta !== 0 && (
-        <div
-          className={`text-xs text-center ${
-            state.trustDelta > 0 ? "text-green-400" : "text-red-400"
-          } animate-pulse`}
-        >
-          信任度 {state.trustDelta > 0 ? "+" : ""}
-          {state.trustDelta}
+        <div className={`text-xs text-center font-bold animate-bounce ${
+          state.trustDelta > 0 ? "text-green-400" : "text-red-400"
+        }`}>
+          <span className="inline-block px-3 py-1 rounded-full bg-[#0d0d24] border border-current/30">
+            {state.trustDelta > 0 ? "↑ 信任" : "↓ 信任"}
+            <span className="text-lg mx-1">{state.trustDelta > 0 ? "+" : ""}{state.trustDelta}</span>
+          </span>
         </div>
       )}
 

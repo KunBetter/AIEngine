@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 export function StatBar({
   label,
   value,
@@ -13,6 +15,14 @@ export function StatBar({
   color?: string;
   size?: "sm" | "md";
 }) {
+  const [pulsing, setPulsing] = useState(false);
+
+  useEffect(() => {
+    setPulsing(true);
+    const timer = setTimeout(() => setPulsing(false), 600);
+    return () => clearTimeout(timer);
+  }, [value]);
+
   const pct = Math.max(0, Math.min(100, (value / max) * 100));
   const h = size === "sm" ? "h-1.5" : "h-2";
   return (
@@ -20,7 +30,7 @@ export function StatBar({
       <span className="text-xs text-gray-500 w-12 shrink-0">{label}</span>
       <div className={`flex-1 ${h} bg-[#1a1a2e] rounded-full overflow-hidden`}>
         <div
-          className={`h-full rounded-full transition-all duration-700 ease-out ${pct <= 25 ? "animate-pulse" : ""}`}
+          className={`h-full rounded-full transition-all duration-700 ease-out ${pct <= 25 ? "animate-pulse" : ""} ${pulsing ? "brightness-150 scale-y-110" : ""}`}
           style={{
             width: `${pct}%`,
             background:
