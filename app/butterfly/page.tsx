@@ -13,6 +13,7 @@ import { ResourceBar } from "@/components/game/ResourceBar";
 import { TownMap } from "@/components/game/TownMap";
 import { LoopGoalBanner } from "@/components/game/LoopGoalBanner";
 import { LoopSummary } from "@/components/game/LoopSummary";
+import { NPCRelationRadar } from "@/components/game/NPCRelationRadar";
 
 const NPC_COLORS: Record<string, string> = {
   elias: "#ffcc00", rose: "#ff6b9d", marcus: "#64b5f6",
@@ -37,6 +38,7 @@ export default function ButterflyPage() {
   const [pixelEvent, setPixelEvent] = useState<PixelEventData | null>(null);
   const [loopGoal, setLoopGoal] = useState("");
   const [showLoopSummary, setShowLoopSummary] = useState(false);
+  const [showRadar, setShowRadar] = useState(false);
   const chatRef = useRef<HTMLDivElement>(null);
   const prevLoopRef = useRef(state.loopNumber);
   const prevCausalLenRef = useRef(0);
@@ -181,6 +183,16 @@ export default function ButterflyPage() {
             📓 {showJournal ? "隐藏日志" : "日志"}
           </button>
           <button
+            onClick={() => setShowRadar(!showRadar)}
+            className={`text-xs px-3 py-1.5 rounded border transition-colors ${
+              showRadar
+                ? "border-[#ff6b9d]/40 text-[#ff6b9d] bg-[#ff6b9d]/10"
+                : "border-[#2a2a4a] text-gray-400 hover:text-white"
+            }`}
+          >
+            🕸 {showRadar ? "隐藏雷达" : "关系雷达"}
+          </button>
+          <button
             onClick={resetGame}
             className="text-xs px-3 py-1.5 rounded border border-[#2a2a4a] text-gray-500 hover:text-white transition-colors"
           >
@@ -221,14 +233,22 @@ export default function ButterflyPage() {
       )}
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-0">
-        <TownMap
-          currentLocation={state.currentLocation}
-          timeOfDay={state.timeOfDay}
-          npcs={state.npcs}
-          selectedNPC={selectedNPC}
-          onLocationClick={handleInvestigate}
-          onNPCClick={handleNPCClick}
-        />
+        {showRadar ? (
+          <NPCRelationRadar
+            npcs={state.npcs}
+            selectedNPC={selectedNPC}
+            onSelectNPC={handleNPCClick}
+          />
+        ) : (
+          <TownMap
+            currentLocation={state.currentLocation}
+            timeOfDay={state.timeOfDay}
+            npcs={state.npcs}
+            selectedNPC={selectedNPC}
+            onLocationClick={handleInvestigate}
+            onNPCClick={handleNPCClick}
+          />
+        )}
 
         {/* NPC互动 + 结果面板 */}
         <div className="lg:col-span-2 flex flex-col gap-4 min-h-0">
