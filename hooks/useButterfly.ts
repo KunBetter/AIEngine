@@ -452,28 +452,22 @@ export function useButterfly() {
   const startNewLoop = useCallback(async () => {
     dispatch({ type: "SET_LOADING", payload: true });
     try {
-      // Call prepare-loop for pre-generation
-      try {
-        const prepRes = await fetch("/api/butterfly/prepare-loop", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            loopNumber: state.loopNumber,
-            previousCausalGraph: state.causalGraph,
-            npcStates: state.npcs,
-            activeMystery: state.activeMystery,
-          }),
-        });
-        if (prepRes.ok) {
-          const prepData = await prepRes.json();
-          if (!prepData.error) {
-            setLoopPrep(prepData as LoopPreparation);
-          }
-        }
-      } catch {
-        // prepare-loop is optional — continue even if it fails
-      }
-
+	      // Fire-and-forget: prepare-loop runs in background, doesn't block UI
+	      fetch("/api/butterfly/prepare-loop", {
+	        method: "POST",
+	        headers: { "Content-Type": "application/json" },
+	        body: JSON.stringify({
+	          loopNumber: state.loopNumber,
+	          previousCausalGraph: state.causalGraph,
+	          npcStates: state.npcs,
+	          activeMystery: state.activeMystery,
+	        }),
+	      }).then(async (prepRes) => {
+	        if (prepRes.ok) {
+	          const prepData = await prepRes.json();
+	          if (!prepData.error) setLoopPrep(prepData as LoopPreparation);
+	        }
+	      }).catch(() => {}); // silent — prepare-loop is optional
       const res = await fetch("/api/butterfly/loop-start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
