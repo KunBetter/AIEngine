@@ -37,6 +37,17 @@ export async function POST(req: NextRequest) {
             const jsonStr = extractJSON(fullText);
             try {
               const parsed = JSON.parse(jsonStr) as SymbioteAIResponse;
+
+              // Early trust delta event — sent before full state update
+              if (parsed.trustDelta !== undefined) {
+                controller.enqueue(
+                  encoder.encode({
+                    type: "trust_update",
+                    data: { delta: parsed.trustDelta },
+                  })
+                );
+              }
+
               controller.enqueue(encoder.encode({ type: "state_update", data: parsed }));
             } catch {
               controller.enqueue(encoder.encode({ type: "error", message: "AI响应解析失败，请重试" }));

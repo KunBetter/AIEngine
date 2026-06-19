@@ -1,6 +1,6 @@
 "use client";
 
-import { useReducer, useCallback } from "react";
+import { useReducer, useCallback, useState } from "react";
 import type {
   SymbioteState,
   SymbioteAIResponse,
@@ -33,6 +33,11 @@ const SCENE_TRANSITIONS: Record<string, string[]> = {
 };
 
 const LOCATIONS = ["着陆点", "洞穴入口", "外星森林", "废弃实验室", "返回舱"];
+
+// Quick local actions that can be handled without full AI round-trip
+const LOCAL_ACTIONS = ["查看周围", "检查装备", "休息一下", "查看地图", "显示状态"];
+// Movement actions that benefit from scene caching
+const MOVE_ACTIONS = ["前往", "返回", "去"];
 
 function checkEnding(state: SymbioteState): string | null {
   if (state.currentLocation === "返回舱" && state.turn > 10) {
@@ -222,11 +227,32 @@ function reducer(state: SymbioteStateV2, action: Action): SymbioteStateV2 {
 
 export function useSymbiote() {
   const [state, dispatch] = useReducer(reducer, null, createInitialState);
+  const [sceneCache, setSceneCache] = useState<Record<string, SymbioteAIResponse>>({});
 
   const sendAction = useCallback(
     async (playerAction: string) => {
       dispatch({ type: "SET_LOADING", payload: true });
       dispatch({ type: "SET_ERROR", payload: "" });
+
+      // Quick action routing: check if this is a basic local action
+      const isLocalAction = LOCAL_ACTIONS.some(a => playerAction.includes(a));
+      // Movement actions: check scene cache for instant navigation
+      const cached = MOVE_ACTIONS.some(a => playerAction.includes(a)) ? sceneCache[playerAction] : null;
+
+      if (cached) {
+        // Use cached scene data, skip API call
+        dispatch({ type: "SET_SCENE", payload: cached });
+        const symMsg: SymbioteMessage = {
+          role: "symbiote",
+          content: cached.symbioteAdvice.dialogue,
+        };
+        dispatch({ type: "ADD_DIALOGUE", payload: symMsg });
+        dispatch({ type: "SET_LOADING", payload: false });
+        return;
+      }
+
+      // Add preferLocal flag for basic actions — AI can respond faster
+      const preferLocal = isLocalAction;
 
       // 添加玩家对话
       const playerMsg: SymbioteMessage = { role: "player", content: playerAction };
@@ -261,6 +287,7 @@ export function useSymbiote() {
             },
             playerAction,
             useStream: true,
+            preferLocal,
           }),
         });
 
@@ -295,9 +322,22 @@ export function useSymbiote() {
 
             try {
               const event = JSON.parse(data);
-              if (event.type === "state_update") {
+              if (event.type === "trust_update") {
+                // Early trust delta — update trust meter immediately
+                const delta = event.data?.delta ?? 0;
+                const newTrust = Math.max(0, Math.min(100, state.trustMeter + delta));
+                dispatch({
+                  type: "UPDATE_TRUST",
+                  payload: { surfaceTrust: newTrust },
+                });
+              } else if (event.type === "state_update") {
                 const eventData = event.data;
                 dispatch({ type: "SET_SCENE", payload: eventData as SymbioteAIResponse });
+
+                // Cache movement results for repeat navigation
+                if (MOVE_ACTIONS.some(a => playerAction.includes(a))) {
+                  setSceneCache(prev => ({ ...prev, [playerAction]: eventData as SymbioteAIResponse }));
+                }
 
                 // Extract evidence cards from response
                 if (eventData.evidenceCards) {
@@ -334,7 +374,7 @@ export function useSymbiote() {
         });
       }
     },
-    [state]
+    [state, sceneCache]
   );
 
   const sendConfrontAction = useCallback(async (claim: string, evidenceIds: string[]) => {
