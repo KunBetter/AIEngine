@@ -569,3 +569,58 @@ export interface SymbioteAIResponseV2 extends SymbioteAIResponse {
     trustCost: number;
   };
 }
+
+// ---- 蝴蝶效应 v3 增强类型 ----
+
+export interface DiscoverableClue {
+  id: string;
+  location: string;
+  timeWindow: { start: number; end: number };
+  description: string;
+  requiredAction: string;
+  revealsFragment: string;
+}
+
+export interface NPCScheduleEntry {
+  timeStart: number;
+  timeEnd: number;
+  location: string;
+}
+
+export interface LoopKeyEvent {
+  time: number;
+  location: string;
+  description: string;
+  condition: string;
+}
+
+export interface LoopPreparation {
+  npcSchedules: Record<string, NPCScheduleEntry[]>;
+  discoverableClues: DiscoverableClue[];
+  keyEvents: LoopKeyEvent[];
+  loopGoal: string;
+}
+
+export interface SSEPhaseEvent {
+  type: "npc_state_change" | "dialogue_start" | "dialogue_chunk" | "causal_fragment" | "timeline_update" | "done";
+  data: Record<string, unknown>;
+}
+
+export interface ButterflyAchievement {
+  id: string;
+  name: string;
+  description: string;
+  unlockedAt: number;
+}
+
+export const BUTTERFLY_ACHIEVEMENTS: Record<string, { name: string; description: string }> = {
+  first_loop: { name: "🔄 初次回溯", description: "完成第1次循环" },
+  five_loops: { name: "⏰ 时间旅人", description: "完成5次循环" },
+  all_npcs: { name: "🤝 全镇皆知", description: "一轮内与所有6个NPC对话" },
+  perfect_loop: { name: "✨ 完美循环", description: "一轮内发现3个以上因果链" },
+  eureka: { name: "💡 灵光一现", description: "首次确认假设" },
+  memory_awakened: { name: "🧠 记忆觉醒", description: "首个NPC达到 aware 阶段" },
+  all_awakened: { name: "🌟 全员觉醒", description: "所有NPC觉醒" },
+  speed_run: { name: "⚡ 闪电破局", description: "3轮内破解谜题" },
+  s_rank: { name: "🏆 S级侦探", description: "获得S评级" },
+};
