@@ -1,6 +1,6 @@
 "use client";
 
-import { useReducer, useCallback } from "react";
+import { useReducer, useCallback, useState } from "react";
 import type {
   ButterflyStateV2,
   CausalNode,
@@ -10,6 +10,7 @@ import type {
   NPCStateV2,
   JournalEntry,
   DialogueMessage,
+  LoopPreparation,
 } from "@/lib/types";
 
 // Fields set dynamically per loop by createInitialNPCState / START_LOOP
@@ -439,10 +440,33 @@ export function getRating(score: number): "S" | "A" | "B" | "C" {
 
 export function useButterfly() {
   const [state, dispatch] = useReducer(reducer, initialState);
+  const [loopPrep, setLoopPrep] = useState<LoopPreparation | null>(null);
 
   const startNewLoop = useCallback(async () => {
     dispatch({ type: "SET_LOADING", payload: true });
     try {
+      // Call prepare-loop for pre-generation
+      try {
+        const prepRes = await fetch("/api/butterfly/prepare-loop", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            loopNumber: state.loopNumber,
+            previousCausalGraph: state.causalGraph,
+            npcStates: state.npcs,
+            activeMystery: state.activeMystery,
+          }),
+        });
+        if (prepRes.ok) {
+          const prepData = await prepRes.json();
+          if (!prepData.error) {
+            setLoopPrep(prepData as LoopPreparation);
+          }
+        }
+      } catch {
+        // prepare-loop is optional — continue even if it fails
+      }
+
       const res = await fetch("/api/butterfly/loop-start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -487,6 +511,12 @@ export function useButterfly() {
       playerInput: string,
       targetNPC?: string,
     ) => {
+      // Route: investigate with possible local cache hit
+      if (actionType === "investigate" && state.currentLocation) {
+        const handled = quickInvestigate(state.currentLocation, playerInput);
+        if (handled) return; // locally resolved, skip API
+      }
+
       // ---- V2: Consume AP before fetch ----
       const apCost: Record<typeof actionType, number> = {
         talk: 1,
@@ -661,6 +691,55 @@ export function useButterfly() {
     });
   }, [state]);
 
+  // Quick move: update location locally, no API call
+  const quickMove = useCallback((location: string) => {
+    const LOCATIONS = ["钟楼", "花店", "诊所", "警局", "图书馆", "广场"];
+    if (LOCATIONS.includes(location)) {
+      dispatch({ type: "SET_LOCATION", payload: location });
+      dispatch({ type: "ADD_JOURNAL", payload: {
+        loopNumber: state.loopNumber,
+        timeOfDay: state.timeOfDay,
+        content: `移动到${location}`,
+        type: "observation",
+      }});
+      dispatch({ type: "USE_AP", payload: 1 });
+    }
+  }, [state.loopNumber, state.timeOfDay]);
+
+  // Quick investigate: check local prep cache first, returns true if handled locally
+  const quickInvestigate = useCallback((location: string, action: string): boolean => {
+    const matchedClue = loopPrep?.discoverableClues.find(
+      c => c.location === location &&
+           state.timeOfDay >= c.timeWindow.start &&
+           state.timeOfDay <= c.timeWindow.end &&
+           action.includes(c.requiredAction)
+    );
+
+    if (matchedClue) {
+      dispatch({ type: "USE_AP", payload: 2 });
+      dispatch({ type: "ADD_JOURNAL", payload: {
+        loopNumber: state.loopNumber,
+        timeOfDay: state.timeOfDay,
+        content: `发现: ${matchedClue.description}`,
+        type: "observation",
+      }});
+      dispatch({ type: "ADD_INSIGHT", payload: 1 });
+      if (matchedClue.revealsFragment) {
+        dispatch({ type: "ADD_FRAGMENTS", payload: [{
+          id: matchedClue.revealsFragment,
+          description: matchedClue.description,
+          relatedNPCs: [],
+          relatedTime: state.timeOfDay,
+          relatedLocation: location,
+          hints: [],
+          isPlaced: false,
+        }]});
+      }
+      return true;
+    }
+    return false;
+  }, [loopPrep, state.timeOfDay, state.loopNumber]);
+
   const resetGame = useCallback(() => dispatch({ type: "RESET" }), []);
 
   // ---- V2: New exported functions ----
@@ -699,6 +778,9 @@ export function useButterfly() {
     anchorChain,
     placeFragment,
     connectFragments,
+    quickMove,
+    quickInvestigate,
+    loopGoal: loopPrep?.loopGoal || "",
     // ---- convenience ----
     isLoading:
       (state as ButterflyStateV2 & { isLoading?: boolean }).isLoading || false,
