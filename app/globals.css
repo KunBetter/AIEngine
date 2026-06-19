@@ -327,3 +327,22 @@ body {
   0%, 100% { r: 5; opacity: 1; }
   50% { r: 7; opacity: 0.6; }
 }
+
+/* ── Task 4: PixelEvent enhancements ────────────────────── */
+
+@keyframes shatterOut {
+  0% { opacity: 1; transform: translate(0, 0) rotate(0deg) scale(1); }
+  100% { opacity: 0; transform: translate(var(--tx, 40px), var(--ty, 40px)) rotate(var(--tr, 45deg)) scale(0.3); }
+}
+@keyframes shatterIn {
+  0% { opacity: 0; transform: translate(var(--tx, -20px), var(--ty, -20px)) rotate(var(--tr, -45deg)) scale(0.3); }
+  100% { opacity: 1; transform: translate(0, 0) rotate(0deg) scale(1); }
+}
+@keyframes clockSpinReverse {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-360deg); }
+}
+@keyframes glitchSlide {
+  0% { transform: translateX(-100%); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { playEventSound } from "@/lib/audio";
 
 // Supported event types (21 total):
 // discovery, flashback, item_get, danger, ending,
@@ -18,6 +19,14 @@ export function PixelEvent({ event, onDone }: { event: PixelEventData; onDone: (
     return () => clearTimeout(timer);
   }, [event, onDone]);
 
+  // Play sound for supported event types
+  useEffect(() => {
+    const audioTypes = ["causal_ripple", "discovery", "secret", "breakthrough", "loop_reset", "loop_break", "npc_awakening"];
+    if (audioTypes.includes(event.type)) {
+      playEventSound(event.type as Parameters<typeof playEventSound>[0]);
+    }
+  }, [event.type]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onDone}>
       <div className="w-[200px] h-[200px] relative">
@@ -31,6 +40,7 @@ export function PixelEvent({ event, onDone }: { event: PixelEventData; onDone: (
         {event.type === "secret" && <SecretEffect />}
         {event.type === "breakthrough" && <BreakthroughEffect />}
         {event.type === "loop_break" && <LoopBreakEffect />}
+        {event.type === "npc_awakening" && <NPCAwakeningEffect />}
         {event.type === "meteor" && <MeteorEffect />}
         {event.type === "evolution" && <EvolutionEffect />}
         {event.type === "civilization" && <CivilizationEffect />}
@@ -142,16 +152,37 @@ function EndingEffect() {
 function TimeResetEffect() {
   return (
     <div className="w-full h-full flex flex-col items-center justify-center gap-3">
-      <svg width="80" height="80" viewBox="0 0 80 80" className="clock-svg">
+      {/* Shatter fragments */}
+      <div className="shatter-container w-48 h-48 relative">
+        {Array.from({ length: 12 }).map((_, i) => {
+          const angle = (i / 12) * Math.PI * 2;
+          const dist = 30 + (i % 4) * 15;
+          const tx = Math.cos(angle) * dist;
+          const ty = Math.sin(angle) * dist;
+          return (
+            <div key={i} className="shatter-piece absolute bg-[#ff6b9d]/60"
+              style={{
+                width: `${8 + (i % 3) * 8}px`,
+                height: `${6 + (i % 4) * 6}px`,
+                left: "50%", top: "50%",
+                "--tx": `${tx}px`,
+                "--ty": `${ty}px`,
+                "--tr": `${(i - 6) * 30}deg`,
+                animation: `shatterOut 0.8s ease-out ${i * 30}ms forwards, shatterIn 0.6s ease-in ${800 + i * 30}ms forwards`,
+                opacity: 0,
+                clipPath: `polygon(${30 + (i%3)*20}% ${10 + (i%2)*15}%, ${60 + (i%2)*15}% ${5 + (i%3)*10}%, ${80 - (i%3)*10}% ${70 + (i%2)*15}%, ${10 + (i%2)*20}% ${80 - (i%3)*10}%)`,
+              } as React.CSSProperties} />
+          );
+        })}
+      </div>
+      <svg width="80" height="80" viewBox="0 0 80 80" style={{ animation: "fadeIn 0.3s ease-out 1.2s both" }}>
         <circle cx="40" cy="40" r="35" fill="none" stroke="#ff6b9d" strokeWidth="2" />
         <line x1="40" y1="40" x2="40" y2="18" stroke="#ff6b9d" strokeWidth="2"
-          style={{ animation: 'clockSpin 0.8s linear infinite', transformOrigin: '40px 40px' }} />
-        <line x1="40" y1="40" x2="55" y2="40" stroke="#ff6b9d" strokeWidth="1.5"
-          style={{ animation: 'clockSpin 0.3s linear infinite', transformOrigin: '40px 40px' }} />
+          style={{ animation: "clockSpinReverse 0.5s linear infinite", transformOrigin: "40px 40px" }} />
       </svg>
-      <div className="calendar-flip text-[#ff6b9d] text-2xl font-mono font-bold">
-        <span className="calendar-digit">LOOP</span>
-      </div>
+      <span className="text-[#ff6b9d] text-2xl font-mono font-bold" style={{ animation: "fadeIn 0.3s ease-out 1.4s both" }}>
+        LOOP RESET
+      </span>
     </div>
   );
 }
@@ -213,6 +244,30 @@ function LoopBreakEffect() {
             }} />
         ))}
       </div>
+    </div>
+  );
+}
+
+function NPCAwakeningEffect() {
+  return (
+    <div className="w-full h-full flex flex-col items-center justify-center gap-2">
+      <div className="w-48 flex flex-col gap-1 overflow-hidden">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="glitch-strip" style={{
+            animationDelay: `${i * 60}ms`,
+            height: `${4 + (i % 3) * 4}px`,
+            backgroundColor: i % 2 === 0 ? "#ff6b9d" : "#ffcc00",
+            opacity: 0.3 + i * 0.1,
+            clipPath: `inset(0 ${10 + i * 5}% 0 ${5 + i * 3}%)`,
+            animation: "glitchSlide 0.4s ease-out both",
+          }} />
+        ))}
+      </div>
+      <span className="text-3xl" style={{ animation: "scaleIn 0.5s ease-out 0.4s both" }}>🧠</span>
+      <span className="text-[#ffcc00] text-xs font-mono animate-pulse"
+        style={{ animation: "fadeIn 0.5s ease-out 0.6s both" }}>
+        MEMORY AWAKENED
+      </span>
     </div>
   );
 }
