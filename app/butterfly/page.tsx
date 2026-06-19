@@ -10,15 +10,7 @@ import type { PixelEventData } from "@/components/ui/PixelEvent";
 import { TimelineBoard } from "@/components/game/TimelineBoard";
 import { CausalCanvas } from "@/components/game/CausalCanvas";
 import { ResourceBar } from "@/components/game/ResourceBar";
-
-const LOCATION_COORDS: Record<string, { x: number; y: number }> = {
-  "钟楼": { x: 200, y: 45 },
-  "花店": { x: 200, y: 145 },
-  "广场": { x: 130, y: 95 },
-  "诊所": { x: 280, y: 95 },
-  "警局": { x: 90, y: 145 },
-  "图书馆": { x: 130, y: 175 },
-};
+import { TownMap } from "@/components/game/TownMap";
 
 const NPC_COLORS: Record<string, string> = {
   elias: "#ffcc00", rose: "#ff6b9d", marcus: "#64b5f6",
@@ -137,10 +129,6 @@ export default function ButterflyPage() {
     await startNewLoop();
   };
 
-  const npcAtCurrentLocation = Object.entries(state.npcs).filter(
-    ([, npc]) => npc.location === state.currentLocation
-  );
-
   return (
     <div className="flex-1 flex flex-col p-4 max-w-6xl mx-auto w-full gap-4">
       {/* 顶部状态栏 */}
@@ -241,127 +229,14 @@ export default function ButterflyPage() {
       )}
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-0">
-        {/* 小镇地图 */}
-        <div className="bg-[#0d0d24] border border-[#2a2a4a] rounded-xl p-4">
-          <h3 className="text-xs text-gray-500 mb-3 uppercase tracking-wider">橡木镇</h3>
-          <svg viewBox="0 0 400 250" className="w-full">
-            {/* 道路 */}
-            <line x1="130" y1="95" x2="200" y2="45" stroke="#2a2a4a" strokeWidth="3" />
-            <line x1="130" y1="95" x2="200" y2="145" stroke="#2a2a4a" strokeWidth="3" />
-            <line x1="130" y1="95" x2="280" y2="95" stroke="#2a2a4a" strokeWidth="3" />
-            <line x1="130" y1="95" x2="90" y2="145" stroke="#2a2a4a" strokeWidth="3" />
-            <line x1="130" y1="95" x2="130" y2="175" stroke="#2a2a4a" strokeWidth="3" />
-
-            {/* 地点 */}
-            {Object.entries(LOCATION_COORDS).map(([name, pos]) => {
-              const isCurrent = state.currentLocation === name;
-              const npcHere = Object.entries(state.npcs).find(
-                ([, n]) => n.location === name
-              );
-              return (
-                <g key={name}>
-                  {/* 地点圆点 */}
-                  <circle
-                    cx={pos.x}
-                    cy={pos.y}
-                    r={isCurrent ? 12 : 8}
-                    fill={isCurrent ? "#ff6b9d" : "#1a1a2e"}
-                    stroke={isCurrent ? "#ff6b9d" : "#3a3a5a"}
-                    strokeWidth="2"
-                    className={isCurrent ? "pulse-glow" : ""}
-                    style={{ cursor: "pointer" }}
-                    onClick={() => handleInvestigate(name)}
-                  />
-                  {/* NPC 指示器 */}
-                  {npcHere && (
-                    <circle
-                      cx={pos.x + 16}
-                      cy={pos.y - 16}
-                      r="5"
-                      fill={NPC_COLORS[npcHere[0]] || "#888"}
-                      stroke="#0d0d24"
-                      strokeWidth="1"
-                    />
-                  )}
-                  <text
-                    x={pos.x}
-                    y={pos.y + 22}
-                    textAnchor="middle"
-                    fill={isCurrent ? "#ff6b9d" : "#666"}
-                    fontSize="9"
-                    fontWeight={isCurrent ? "bold" : "normal"}
-                  >
-                    {name}
-                  </text>
-                </g>
-              );
-            })}
-
-            {/* 玩家位置指示 */}
-            {(() => {
-              const pos = LOCATION_COORDS[state.currentLocation];
-              if (!pos) return null;
-              return (
-                <text x={pos.x} y={pos.y - 20} textAnchor="middle" fill="#fff" fontSize="10">
-                  ▼ 你在这里
-                </text>
-              );
-            })()}
-          </svg>
-
-          {/* 当前位置的NPC */}
-          <div className="mt-3 pt-3 border-t border-[#1a1a2e]">
-            <p className="text-xs text-gray-500 mb-2">当前在此地的NPC:</p>
-            {npcAtCurrentLocation.length === 0 ? (
-              <p className="text-xs text-gray-600">无人</p>
-            ) : (
-              <div className="flex flex-wrap gap-1.5">
-                {npcAtCurrentLocation.map(([id, npc]) => (
-                  <button
-                    key={id}
-                    onClick={() => handleNPCClick(id)}
-                    className={`text-xs px-2 py-1 rounded-full border transition-colors ${
-                      selectedNPC === id
-                        ? "border-[#ff6b9d] text-[#ff6b9d] bg-[#ff6b9d]/10"
-                        : "border-[#2a2a4a] text-gray-400 hover:border-[#4a4a6a]"
-                    }`}
-                  >
-                    <span
-                      className="inline-block w-1.5 h-1.5 rounded-full mr-1"
-                      style={{ backgroundColor: NPC_COLORS[id] || "#888" }}
-                    />
-                    {npc.name}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* 所有NPC状态一览 */}
-          <div className="mt-3 pt-3 border-t border-[#1a1a2e]">
-            <p className="text-xs text-gray-500 mb-2">全镇NPC:</p>
-            <div className="space-y-1">
-              {Object.entries(state.npcs).map(([id, npc]) => (
-                <button
-                  key={id}
-                  onClick={() => handleNPCClick(id)}
-                  className="w-full text-left text-xs flex items-center gap-2 px-2 py-1 rounded hover:bg-[#1a1a2e] transition-colors"
-                >
-                  <span
-                    className="w-1.5 h-1.5 rounded-full shrink-0"
-                    style={{ backgroundColor: NPC_COLORS[id] || "#888" }}
-                  />
-                  <span className="text-white truncate">{npc.name}</span>
-                  <span className="text-gray-500 truncate">{npc.currentMood}</span>
-                  <span className="text-gray-600 ml-auto">{npc.location}</span>
-                  {npc.dejaVu && (
-                    <span className="text-[#ff6b9d]/50 text-[9px] ml-auto" title={npc.dejaVu}>💭</span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+        <TownMap
+          currentLocation={state.currentLocation}
+          timeOfDay={state.timeOfDay}
+          npcs={state.npcs}
+          selectedNPC={selectedNPC}
+          onLocationClick={handleInvestigate}
+          onNPCClick={handleNPCClick}
+        />
 
         {/* NPC互动 + 结果面板 */}
         <div className="lg:col-span-2 flex flex-col gap-4 min-h-0">

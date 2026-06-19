@@ -322,3 +322,8 @@ body {
 .building:nth-child(2) { --bh: 50px; }
 .building:nth-child(3) { --bh: 40px; }
 .building:nth-child(4) { --bh: 60px; }
+
+@keyframes pulseGlow {
+  0%, 100% { r: 5; opacity: 1; }
+  50% { r: 7; opacity: 0.6; }
+}
