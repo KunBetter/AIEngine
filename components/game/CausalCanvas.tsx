@@ -9,6 +9,7 @@ const NPC_COLORS: Record<string, string> = {
   elias: "#ffcc00", rose: "#ff6b9d", marcus: "#64b5f6",
   brooks: "#8888ff", vera: "#bb66ff", sam: "#88aa88",
 };
+const CONNECT_DISTANCE = 80;
 
 interface PlacedFragment {
   id: string;
@@ -39,6 +40,20 @@ export function CausalCanvas({
 
   const unplacedFragments = fragments.filter(f => !placed.find(p => p.id === f.id));
 
+  const findNearestFragment = useCallback((x: number, y: number, excludeId: string) => {
+    let nearest: PlacedFragment | null = null;
+    let minDist = CONNECT_DISTANCE;
+    for (const p of placed) {
+      if (p.id === excludeId) continue;
+      const dist = Math.sqrt((p.x + CARD_WIDTH/2 - x) ** 2 + (p.y + CARD_HEIGHT/2 - y) ** 2);
+      if (dist < minDist) {
+        minDist = dist;
+        nearest = p;
+      }
+    }
+    return nearest;
+  }, [placed]);
+
   const handleDrop = useCallback((e: React.DragEvent, fragmentId: string) => {
     e.preventDefault();
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -48,14 +63,26 @@ export function CausalCanvas({
     const fragment = fragments.find(f => f.id === fragmentId);
     if (!fragment) return;
 
-    setPlaced(prev => [...prev, {
+    const newPlaced: PlacedFragment = {
       id: fragment.id, x, y,
       description: fragment.description,
       relatedNPCs: fragment.relatedNPCs,
       isCorrect: null, connections: [],
-    }]);
+    };
+
+    // Check for nearby fragments to auto-connect
+    const nearby = findNearestFragment(x + CARD_WIDTH/2, y + CARD_HEIGHT/2, fragmentId);
+    if (nearby) {
+      newPlaced.connections = [nearby.id];
+      setPlaced(prev => prev.map(p =>
+        p.id === nearby.id ? { ...p, connections: [...p.connections, fragmentId] } : p
+      ));
+      onConnectFragments(fragmentId, nearby.id);
+    }
+
+    setPlaced(prev => [...prev, newPlaced]);
     onPlaceFragment(fragmentId, x, y);
-  }, [fragments, onPlaceFragment]);
+  }, [fragments, onPlaceFragment, findNearestFragment, onConnectFragments]);
 
   const handleSelect = useCallback((id: string) => {
     setSelected(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
@@ -128,6 +155,23 @@ export function CausalCanvas({
               </pattern>
             </defs>
             <rect width="100%" height="100%" fill="url(#grid)" />
+          </svg>
+
+          {/* Connection lines */}
+          <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 5 }}>
+            {placed.flatMap(p =>
+              p.connections.map(targetId => {
+                const target = placed.find(t => t.id === targetId);
+                if (!target) return null;
+                return (
+                  <line key={`${p.id}-${targetId}`}
+                    x1={p.x + CARD_WIDTH / 2} y1={p.y + CARD_HEIGHT / 2}
+                    x2={target.x + CARD_WIDTH / 2} y2={target.y + CARD_HEIGHT / 2}
+                    stroke="#ff6b9d" strokeWidth="1.5" strokeDasharray="4 2"
+                    opacity={0.5} />
+                );
+              })
+            )}
           </svg>
 
           {/* Placed fragments */}
