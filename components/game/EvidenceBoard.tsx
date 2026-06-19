@@ -82,6 +82,20 @@ export function EvidenceBoard({
                   </div>
                 )}
 
+                {card.connectedTo.length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-[#1a1a2e]">
+                    <p className="text-[9px] text-[#00ff88]/60 mb-1">🔗 关联证据:</p>
+                    {card.connectedTo.map((targetId: string) => {
+                      const target = cards.find((c: any) => c.id === targetId);
+                      return target ? (
+                        <span key={targetId} className="inline-block text-[9px] px-1.5 py-0.5 rounded bg-[#00ff88]/5 text-[#00ff88]/70 mr-1 mb-1 border border-[#00ff88]/10">
+                          {target.title.length > 15 ? target.title.slice(0, 15) + "..." : target.title}
+                        </span>
+                      ) : null;
+                    })}
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between mt-2">
                   <div className="flex gap-1">
                     <button onClick={(e) => { e.stopPropagation(); onMarkCredible(card.id); }}
@@ -99,11 +113,23 @@ export function EvidenceBoard({
                   </button>
                 </div>
 
-                <div className="mt-1.5 h-0.5 bg-[#0a0a1a] rounded-full overflow-hidden">
-                  <div className="h-full rounded-full transition-all"
-                    style={{ width: `${card.credibility}%`,
-                      backgroundColor: card.credibility > 60 ? "#44ff44" : card.credibility > 30 ? "#ffaa00" : "#ff4444" }} />
+                <div className="mt-1.5">
+                  <div className="flex items-center justify-between text-[9px] text-gray-600 mb-0.5">
+                    <span>可信度</span>
+                    <span>{card.credibility}%</span>
+                  </div>
+                  <div className="h-1 bg-[#1a1a2e] rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${card.credibility}%`,
+                        backgroundColor: card.credibility > 60 ? "#44ff44" : card.credibility > 30 ? "#ffaa00" : "#ff4444" }} />
+                  </div>
                 </div>
+                {card.hiddenContradiction && (
+                  <div className="mt-1 flex items-center gap-1 text-[9px] text-yellow-400/60">
+                    <span>⚠</span>
+                    <span className="truncate">{card.hiddenContradiction.slice(0, 40)}...</span>
+                  </div>
+                )}
               </div>
             </div>
           );
