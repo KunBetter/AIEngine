@@ -7,6 +7,8 @@ import { StreamingText } from "@/components/ui/StreamingText";
 import { saveGame } from "@/lib/save-system";
 import { PixelEvent } from "@/components/ui/PixelEvent";
 import type { PixelEventData } from "@/components/ui/PixelEvent";
+import { AchievementToast } from "@/components/ui/AchievementToast";
+import { BUTTERFLY_ACHIEVEMENTS } from "@/lib/types";
 import { TimelineBoard } from "@/components/game/TimelineBoard";
 import { CausalCanvas } from "@/components/game/CausalCanvas";
 import { ResourceBar } from "@/components/game/ResourceBar";
@@ -39,6 +41,7 @@ export default function ButterflyPage() {
   const [loopGoal, setLoopGoal] = useState("");
   const [showLoopSummary, setShowLoopSummary] = useState(false);
   const [showRadar, setShowRadar] = useState(false);
+  const [pendingAchievement, setPendingAchievement] = useState<{ id: string; name: string; description: string } | null>(null);
   const chatRef = useRef<HTMLDivElement>(null);
   const prevLoopRef = useRef(state.loopNumber);
   const prevCausalLenRef = useRef(0);
@@ -112,6 +115,17 @@ export default function ButterflyPage() {
     }
     prevPreventedRef.current = state.keyEvent.prevented;
   }, [state.keyEvent.prevented]);
+
+  // Achievement detection
+  useEffect(() => {
+    if (state.loopNumber >= 2 && !pendingAchievement) {
+      setPendingAchievement({
+        id: "first_loop",
+        name: BUTTERFLY_ACHIEVEMENTS.first_loop.name,
+        description: BUTTERFLY_ACHIEVEMENTS.first_loop.description,
+      });
+    }
+  }, [state.loopNumber]);
 
   // Format time
   const timeLabel = `${state.timeOfDay}:00`;
@@ -572,6 +586,14 @@ export default function ButterflyPage() {
       )}
 
       {pixelEvent && <PixelEvent event={pixelEvent} onDone={() => setPixelEvent(null)} />}
+
+      {pendingAchievement && (
+        <AchievementToast
+          name={pendingAchievement.name}
+          description={pendingAchievement.description}
+          onDone={() => setPendingAchievement(null)}
+        />
+      )}
     </div>
   );
 }
