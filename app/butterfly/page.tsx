@@ -12,6 +12,7 @@ import { CausalCanvas } from "@/components/game/CausalCanvas";
 import { ResourceBar } from "@/components/game/ResourceBar";
 import { TownMap } from "@/components/game/TownMap";
 import { LoopGoalBanner } from "@/components/game/LoopGoalBanner";
+import { LoopSummary } from "@/components/game/LoopSummary";
 
 const NPC_COLORS: Record<string, string> = {
   elias: "#ffcc00", rose: "#ff6b9d", marcus: "#64b5f6",
@@ -35,11 +36,13 @@ export default function ButterflyPage() {
   const [showCanvas, setShowCanvas] = useState(false);
   const [pixelEvent, setPixelEvent] = useState<PixelEventData | null>(null);
   const [loopGoal, setLoopGoal] = useState("");
+  const [showLoopSummary, setShowLoopSummary] = useState(false);
   const chatRef = useRef<HTMLDivElement>(null);
   const prevLoopRef = useRef(state.loopNumber);
   const prevCausalLenRef = useRef(0);
   const prevDialogueLenRef = useRef(0);
   const prevPreventedRef = useRef(false);
+  const prevStatsRef = useRef({ causalCount: 0, clueCount: 0, hypConfirmed: 0, hypRejected: 0 });
 
   useEffect(() => {
     if (chatRef.current) {
@@ -53,6 +56,13 @@ export default function ButterflyPage() {
       saveGame("butterfly", 0, state as unknown as Record<string, unknown>, `循环${state.loopNumber}结束`);
     }
   }, [state.timeOfDay]);
+
+  // Show loop summary when day ends
+  useEffect(() => {
+    if (state.timeOfDay >= 24 && !showLoopSummary && state.dialogueMessages.length > 0) {
+      setShowLoopSummary(true);
+    }
+  }, [state.timeOfDay, showLoopSummary, state.dialogueMessages.length]);
 
   // Pixel event: Time reset (new loop)
   useEffect(() => {
@@ -515,6 +525,30 @@ export default function ButterflyPage() {
           <p className="text-sm text-gray-300">评分: <span className="text-[#ff6b9d] font-bold">{calculateScore(state)}</span></p>
           <p className="text-sm text-gray-300 mt-1">评级: <span className="text-[#ff6b9d] font-bold">{getRating(calculateScore(state))}</span></p>
         </div>
+      )}
+
+      {/* 循环结束总结面板 */}
+      {showLoopSummary && (
+        <LoopSummary
+          loopNumber={state.loopNumber}
+          changes={[]}
+          newClues={state.playerJournal.filter(e => e.loopNumber === state.loopNumber).length - prevStatsRef.current.clueCount}
+          newCausalNodes={state.causalGraph.length - prevStatsRef.current.causalCount}
+          confirmedHypotheses={state.hypotheses.filter(h => h.status === "confirmed").length - prevStatsRef.current.hypConfirmed}
+          rejectedHypotheses={state.hypotheses.filter(h => h.status === "rejected").length - prevStatsRef.current.hypRejected}
+          score={calculateScore(state)}
+          rating={getRating(calculateScore(state))}
+          onContinue={async () => {
+            setShowLoopSummary(false);
+            prevStatsRef.current = {
+              causalCount: state.causalGraph.length,
+              clueCount: state.playerJournal.filter(e => e.loopNumber === state.loopNumber).length,
+              hypConfirmed: state.hypotheses.filter(h => h.status === "confirmed").length,
+              hypRejected: state.hypotheses.filter(h => h.status === "rejected").length,
+            };
+            await handleNewLoop();
+          }}
+        />
       )}
 
       {pixelEvent && <PixelEvent event={pixelEvent} onDone={() => setPixelEvent(null)} />}
