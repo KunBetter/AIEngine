@@ -67,7 +67,7 @@ export default function ButterflyPage() {
     if (state.loopNumber > 0 && state.timeOfDay >= 24) {
       saveGame("butterfly", 0, state as unknown as Record<string, unknown>, `循环${state.loopNumber}结束`);
     }
-  }, [state.timeOfDay]);
+  }, [state.timeOfDay, state.loopNumber]);
 
   // Show loop summary when day ends
   useEffect(() => {
@@ -123,9 +123,11 @@ export default function ButterflyPage() {
     prevPreventedRef.current = state.keyEvent.prevented;
   }, [state.keyEvent.prevented]);
 
-  // Achievement detection
+  // Achievement detection — use ref to avoid re-trigger
+  const achievementTriggeredRef = useRef(false);
   useEffect(() => {
-    if (state.loopNumber >= 2 && !pendingAchievement) {
+    if (state.loopNumber >= 2 && !achievementTriggeredRef.current) {
+      achievementTriggeredRef.current = true;
       setPendingAchievement({
         id: "first_loop",
         name: BUTTERFLY_ACHIEVEMENTS.first_loop.name,

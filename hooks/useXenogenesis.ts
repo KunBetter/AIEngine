@@ -1,6 +1,6 @@
 "use client";
 
-import { useReducer, useCallback, useState } from "react";
+import { useReducer, useCallback, useState, useEffect } from "react";
 import type {
   XenogenesisStateV2,
   SpeciesDesign,
@@ -42,7 +42,8 @@ type Action =
       type: "USE_INTERVENTION";
       payload: { cost: number; effects: Partial<XenogenesisStateV2> };
     }
-  | { type: "ARCHIVE_GENE"; payload: ArchivedGene };
+  | { type: "ARCHIVE_GENE"; payload: ArchivedGene }
+  | { type: "RANDOMIZE_SEED" };
 
 // ---- Constants ----
 
@@ -109,11 +110,6 @@ const INTERVENTIONS: Record<
   },
 };
 
-// ---- Module-level state (reset on RESET) ----
-
-let colorIdx = 0;
-let speciesCounter = 0;
-
 // ---- Helpers ----
 
 function generateSeed(): string {
@@ -125,9 +121,8 @@ function generateSeed(): string {
 }
 
 function createInitialState(): XenogenesisStateV2 {
-  colorIdx = 0;
-  speciesCounter = 0;
-  const seed = generateSeed();
+  // Fixed seed for SSR stability — randomized on client mount
+  const seed = "DEFAULT";
   const planetTiles = generatePlanet({
     width: 20,
     height: 12,
@@ -262,8 +257,48 @@ function reducer(
     case "SET_PLANET_NAME":
       return { ...state, planetName: action.payload };
 
-    case "RESET":
-      return createInitialState();
+    case "RESET": {
+      // RESET only fires on client (user action) — Math.random is safe
+      const newSeed = generateSeed();
+      const planetTiles = generatePlanet({
+        width: 20, height: 12, seed: newSeed,
+        waterCoverage: 65, globalTemperature: 22,
+      });
+      return {
+        ...createInitialState(),
+        seed: newSeed,
+        planetTiles,
+        individuals: [],
+        species: {},
+        epoch: 0,
+        timeline: [],
+        disasters: [],
+        civilizations: [],
+        achievements: [],
+        disasterWarnings: [],
+      };
+    }
+
+    case "RANDOMIZE_SEED": {
+      const newSeed = generateSeed();
+      const planetTiles = generatePlanet({
+        width: 20, height: 12, seed: newSeed,
+        waterCoverage: 65, globalTemperature: 22,
+      });
+      return {
+        ...state,
+        seed: newSeed,
+        planetTiles,
+        individuals: [],
+        species: {},
+        epoch: 0,
+        timeline: [],
+        disasters: [],
+        civilizations: [],
+        achievements: [],
+        disasterWarnings: [],
+      };
+    }
 
     // --- New v2 actions ---
 
@@ -375,10 +410,9 @@ function reducer(
     }
 
     case "ADD_SPECIES": {
-      speciesCounter++;
-      const id = `species_${speciesCounter}`;
-      const color = SPECIES_COLORS[colorIdx % SPECIES_COLORS.length];
-      colorIdx++;
+      const existingCount = Object.keys(state.species).length;
+      const id = `species_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      const color = SPECIES_COLORS[existingCount % SPECIES_COLORS.length];
       const emoji = SPECIES_EMOJIS[action.payload.type] || "❓";
       const initialPop = 100;
 
@@ -460,6 +494,11 @@ function reducer(
 
 export function useXenogenesisV2() {
   const [state, dispatch] = useReducer(reducer, null, createInitialState);
+
+  // Randomize planet seed on first client mount (SSR-safe)
+  useEffect(() => {
+    dispatch({ type: "RANDOMIZE_SEED" });
+  }, []);
 
   // Pre-cached hints for the upcoming epoch (from AI predictions)
   const [nextEpochHints, setNextEpochHints] = useState<string[]>([]);

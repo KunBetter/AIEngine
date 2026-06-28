@@ -17,6 +17,7 @@ export function createIndividuals(
   species: SpeciesDef,
   count: number,
   tiles: PlanetTile[][],
+  rng: () => number = Math.random,
 ): SpeciesIndividual[] {
   const individuals: SpeciesIndividual[] = [];
   const habitableTiles = findHabitableTiles(species, tiles);
@@ -24,14 +25,14 @@ export function createIndividuals(
   if (habitableTiles.length === 0) return individuals;
 
   for (let i = 0; i < count; i++) {
-    const tile = habitableTiles[Math.floor(Math.random() * habitableTiles.length)];
+    const tile = habitableTiles[Math.floor(rng() * habitableTiles.length)];
     individuals.push({
       id: `${species.id}_ind_${i}_${Date.now()}`,
       speciesId: species.id,
       x: tile.x,
       y: tile.y,
-      hunger: 20 + Math.random() * 30,
-      health: 80 + Math.random() * 20,
+      hunger: 20 + rng() * 30,
+      health: 80 + rng() * 20,
       age: 0,
       state: "idle",
     });
@@ -66,6 +67,7 @@ export function findHabitableTiles(species: SpeciesDef, tiles: PlanetTile[][]): 
 export function runTick(
   state: XenogenesisStateV2,
   tick: number,
+  rng: () => number = Math.random,
 ): TickResult {
   const events: TickEvent[] = [];
   let individuals = [...state.individuals];
@@ -84,18 +86,27 @@ export function runTick(
   }
 
   // 2. Determine behavior states
+  // Build spatial index for large populations (>200 individuals)
+  const spatialIndex = individuals.length > 200 ? buildSpatialIndex(individuals, SPATIAL_CELL_SIZE) : null;
+
   for (const ind of individuals) {
     if (ind.state === "dying") continue;
     const species = state.species[ind.speciesId];
     if (!species) continue;
 
-    const threats = individuals.filter(
-      other =>
-        other.speciesId !== ind.speciesId &&
-        other.state !== "dying" &&
-        isPredator(state.species[other.speciesId], species) &&
-        distance(ind, other) < 3
-    );
+    const threats = spatialIndex
+      ? neighboursOf(ind, spatialIndex, 3).filter(
+          other =>
+            other.speciesId !== ind.speciesId &&
+            isPredator(state.species[other.speciesId], species)
+        )
+      : individuals.filter(
+          other =>
+            other.speciesId !== ind.speciesId &&
+            other.state !== "dying" &&
+            isPredator(state.species[other.speciesId], species) &&
+            distance(ind, other) < 3
+        );
 
     if (threats.length > 0) {
       ind.state = "fleeing";
@@ -103,12 +114,12 @@ export function runTick(
       ind.state = species.type === "carnivore" || species.type === "omnivore"
         ? "hunting"
         : "foraging";
-    } else if (ind.health > 60 && ind.age > 10 && Math.random() < reproductionChance(species)) {
+    } else if (ind.health > 60 && ind.age > 10 && rng() < reproductionChance(species)) {
       ind.state = "mating";
     } else if (ind.hunger > 30 || ind.health < 40) {
       ind.state = "migrating";
     } else {
-      ind.state = Math.random() < 0.7 ? "idle" : "resting";
+      ind.state = rng() < 0.7 ? "idle" : "resting";
     }
   }
 
@@ -128,7 +139,9 @@ export function runTick(
         break;
       }
       case "hunting": {
-        const prey = findPrey(ind, individuals, state.species);
+        const prey = spatialIndex
+          ? findPreySpatial(ind, spatialIndex, state.species)
+          : findPrey(ind, individuals, state.species);
         if (prey) {
           const predatorSpecies = state.species[ind.speciesId];
           const preySpecies = state.species[prey.speciesId];
@@ -136,7 +149,7 @@ export function runTick(
             ? calculateHuntSuccess(predatorSpecies, preySpecies)
             : 0.5;
 
-          if (Math.random() < successRate) {
+          if (rng() < successRate) {
             prey.state = "dying";
             prey.health = 0;
             ind.hunger = Math.max(0, ind.hunger - 40);
@@ -158,7 +171,7 @@ export function runTick(
       case "mating": {
         const mate = findMate(ind, individuals, state.species);
         if (mate) {
-          const child = createOffspring(ind, state.species);
+          const child = createOffspring(ind, state.species, rng);
           if (child) {
             individuals.push(child);
             events.push({
@@ -173,7 +186,7 @@ export function runTick(
         break;
       }
       case "migrating": {
-        moveToBetterTile(ind, state.planetTiles, state.species[ind.speciesId]);
+        moveToBetterTile(ind, state.planetTiles, state.species[ind.speciesId], rng);
         break;
       }
     }
@@ -186,7 +199,7 @@ export function runTick(
     else if (ind.hunger > 50) ind.health -= 1;
     else if (ind.hunger < 20) ind.health += 1;
 
-    if (ind.age > 80 + Math.random() * 40) ind.health -= 2;
+    if (ind.age > 80 + rng() * 40) ind.health -= 2;
 
     const tile = getTile(state.planetTiles, ind.x, ind.y);
     if (tile?.special === "toxic") ind.health -= 3;
@@ -288,6 +301,23 @@ function findPrey(
   return candidates[0];
 }
 
+function findPreySpatial(
+  hunter: SpeciesIndividual,
+  index: SpatialIndex,
+  speciesMap: Record<string, SpeciesDef>,
+): SpeciesIndividual | null {
+  const candidates = neighboursOf(hunter, index, 5).filter(other => {
+    if (other.speciesId === hunter.speciesId) return false;
+    const hunterSpecies = speciesMap[hunter.speciesId];
+    const preySpecies = speciesMap[other.speciesId];
+    return isPredator(hunterSpecies, preySpecies);
+  });
+
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => a.health - b.health);
+  return candidates[0];
+}
+
 function findMate(
   individual: SpeciesIndividual,
   individuals: SpeciesIndividual[],
@@ -305,6 +335,7 @@ function findMate(
 function createOffspring(
   parent: SpeciesIndividual,
   speciesMap: Record<string, SpeciesDef>,
+  rng: () => number,
 ): SpeciesIndividual | null {
   const species = speciesMap[parent.speciesId];
   if (!species) return null;
@@ -312,10 +343,10 @@ function createOffspring(
   return {
     id: `${parent.speciesId}_ind_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     speciesId: parent.speciesId,
-    x: parent.x + (Math.random() - 0.5) * 2,
-    y: parent.y + (Math.random() - 0.5) * 2,
+    x: parent.x + (rng() - 0.5) * 2,
+    y: parent.y + (rng() - 0.5) * 2,
     hunger: 10,
-    health: 70 + Math.random() * 30,
+    health: 70 + rng() * 30,
     age: 0,
     state: "idle",
   };
@@ -355,6 +386,7 @@ function moveToBetterTile(
   individual: SpeciesIndividual,
   tiles: PlanetTile[][],
   species: SpeciesDef | undefined,
+  rng: () => number,
 ): void {
   if (!species) return;
   const habitable = findHabitableTiles(species, tiles);
@@ -367,12 +399,61 @@ function moveToBetterTile(
     if (tileScore > currentScore) best = tile;
   }
 
-  individual.x = clamp(Math.round(best.x + (Math.random() - 0.5) * 4), 0, (tiles[0]?.length || 60) - 1);
-  individual.y = clamp(Math.round(best.y + (Math.random() - 0.5) * 4), 0, tiles.length - 1);
+  individual.x = clamp(Math.round(best.x + (rng() - 0.5) * 4), 0, (tiles[0]?.length || 60) - 1);
+  individual.y = clamp(Math.round(best.y + (rng() - 0.5) * 4), 0, tiles.length - 1);
 }
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+// ---- Spatial indexing for faster neighbour queries ----\\n
+const SPATIAL_CELL_SIZE = 10;
+
+interface SpatialIndex {
+  cells: Map<string, Set<SpeciesIndividual>>;
+  cellSize: number;
+}
+
+function buildSpatialIndex(individuals: SpeciesIndividual[], cellSize: number): SpatialIndex {
+  const cells = new Map<string, Set<SpeciesIndividual>>();
+  for (const ind of individuals) {
+    if (ind.state === "dying") continue;
+    const cx = Math.floor(ind.x / cellSize);
+    const cy = Math.floor(ind.y / cellSize);
+    const key = `${cx},${cy}`;
+    let set = cells.get(key);
+    if (!set) {
+      set = new Set();
+      cells.set(key, set);
+    }
+    set.add(ind);
+  }
+  return { cells, cellSize };
+}
+
+function neighboursOf(
+  ind: SpeciesIndividual,
+  index: SpatialIndex,
+  maxDist: number,
+): SpeciesIndividual[] {
+  const results: SpeciesIndividual[] = [];
+  const cx = Math.floor(ind.x / index.cellSize);
+  const cy = Math.floor(ind.y / index.cellSize);
+  const cellRange = Math.ceil(maxDist / index.cellSize);
+  for (let dx = -cellRange; dx <= cellRange; dx++) {
+    for (let dy = -cellRange; dy <= cellRange; dy++) {
+      const cell = index.cells.get(`${cx + dx},${cy + dy}`);
+      if (!cell) continue;
+      for (const other of cell) {
+        if (other === ind) continue;
+        if (distance(ind, other) < maxDist) {
+          results.push(other);
+        }
+      }
+    }
+  }
+  return results;
 }
 
 // ---- Statistical mode (for large populations) ----
@@ -380,6 +461,7 @@ function clamp(value: number, min: number, max: number): number {
 export function runTickStatistical(
   state: XenogenesisStateV2,
   tick: number,
+  rng: () => number = Math.random,
 ): TickResult {
   const events: TickEvent[] = [];
   const populationChanges: Record<string, number> = {};
@@ -390,7 +472,7 @@ export function runTickStatistical(
 
     const pop = species.population;
     const growthRate = calculateGrowthRate(species, state);
-    const fluctuation = (Math.random() - 0.5) * pop * 0.05;
+    const fluctuation = (rng() - 0.5) * pop * 0.05;
     const delta = Math.round(pop * growthRate + fluctuation);
     const newPop = Math.max(0, pop + delta);
 

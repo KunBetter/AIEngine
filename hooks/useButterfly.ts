@@ -1,6 +1,6 @@
 "use client";
 
-import { useReducer, useCallback, useState } from "react";
+import { useReducer, useCallback, useState, useRef } from "react";
 import type {
   ButterflyStateV2,
   CausalNode,
@@ -214,8 +214,6 @@ const initialState: ButterflyStateV2 = {
   isOverheated: false,
 };
 
-let causalIdCounter = 0;
-
 function reducer(state: ButterflyStateV2, action: Action): ButterflyStateV2 {
   switch (action.type) {
     case "START_LOOP": {
@@ -247,10 +245,9 @@ function reducer(state: ButterflyStateV2, action: Action): ButterflyStateV2 {
     }
 
     case "ADD_CAUSAL_NODE": {
-      causalIdCounter++;
       const node: CausalNode = {
         ...action.payload,
-        id: `causal_${causalIdCounter}`,
+        id: `causal_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         loopNumber: state.loopNumber,
       };
       return { ...state, causalGraph: [...state.causalGraph, node] };
@@ -449,6 +446,7 @@ export function getRating(score: number): "S" | "A" | "B" | "C" {
 export function useButterfly() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [loopPrep, setLoopPrep] = useState<LoopPreparation | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const startNewLoop = useCallback(async () => {
     dispatch({ type: "SET_LOADING", payload: true });
@@ -543,8 +541,14 @@ export function useButterfly() {
       }
 
       try {
+        // Cancel any in-flight request
+        abortRef.current?.abort();
+        const controller = new AbortController();
+        abortRef.current = controller;
+
         const res = await fetch("/api/butterfly/action", {
           method: "POST",
+          signal: controller.signal,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             gameState: {
@@ -784,10 +788,8 @@ export function useButterfly() {
     quickInvestigate,
     loopGoal: loopPrep?.loopGoal || "",
     // ---- convenience ----
-    isLoading:
-      (state as ButterflyStateV2 & { isLoading?: boolean }).isLoading || false,
-    error:
-      (state as ButterflyStateV2 & { error?: string }).error || "",
+    isLoading: state.isLoading || false,
+    error: state.error || "",
     timeOfDay: state.timeOfDay,
     isDayEnd: state.timeOfDay >= 24,
   };

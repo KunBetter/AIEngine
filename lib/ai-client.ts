@@ -1,8 +1,13 @@
 import OpenAI from "openai";
 import type { AIRequestOptions } from "./types";
 
+const apiKey = process.env.DEEPSEEK_API_KEY;
+if (!apiKey && typeof window === "undefined") {
+  console.warn("[AI Engine] DEEPSEEK_API_KEY is not set — AI calls will fail. Set it in .env.local");
+}
+
 const openai = new OpenAI({
-  apiKey: process.env.DEEPSEEK_API_KEY || "",
+  apiKey: apiKey || "MISSING_KEY",
   baseURL: "https://api.deepseek.com",
 });
 
@@ -47,10 +52,11 @@ export function validateJSON(obj: Record<string, unknown>, schema: Record<string
 }
 
 const responseCache = new Map<string, { data: Record<string, unknown>; timestamp: number }>();
-const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutes (reduced from 1h — game states change quickly)
 
 function cacheKey(systemPrompt: string, userMessage: string): string {
-  const input = systemPrompt.slice(0, 200) + userMessage.slice(0, 200);
+  // Use full prompt for cache key to minimize collisions
+  const input = systemPrompt + userMessage;
   let hash = 0;
   for (let i = 0; i < input.length; i++) {
     hash = ((hash << 5) - hash) + input.charCodeAt(i);

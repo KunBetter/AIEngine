@@ -13,7 +13,7 @@ import { PixelEvent } from "@/components/ui/PixelEvent";
 import type { PixelEventData } from "@/components/ui/PixelEvent";
 
 export default function SymbiotePage() {
-  const { state, sendAction, sendConfrontAction, resetGame, connectEvidence, markEvidence, startConfrontation, endConfrontation, isLoading, error } = useSymbiote();
+  const { state, sendAction, sendConfrontAction, resetGame, connectEvidence, markEvidence, startConfrontation, endConfrontation, retry, isLoading, error } = useSymbiote();
   const [customInput, setCustomInput] = useState("");
   const [showEvidence, setShowEvidence] = useState(false);
   const [pixelEvent, setPixelEvent] = useState<PixelEventData | null>(null);
@@ -35,7 +35,7 @@ export default function SymbiotePage() {
     if (state.turn > 0 && state.turn % 3 === 0 && !state.ending) {
       saveGame("symbiote", 0, state as unknown as Record<string, unknown>, `自动 - 第${state.turn}轮`);
     }
-  }, [state.turn]);
+  }, [state.turn, state.ending]);
 
   // Pixel event: Discovery (new location)
   useEffect(() => {
@@ -199,7 +199,7 @@ export default function SymbiotePage() {
       />
 
       {/* 错误提示 */}
-      <ErrorBanner message={error} onRetry={() => sendAction("重试")} />
+      <ErrorBanner message={error} onRetry={retry} />
 
       {/* 主内容区 */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-0">

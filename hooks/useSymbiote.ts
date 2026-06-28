@@ -1,6 +1,6 @@
 "use client";
 
-import { useReducer, useCallback, useState } from "react";
+import { useReducer, useCallback, useState, useEffect, useRef } from "react";
 import type {
   SymbioteState,
   SymbioteAIResponse,
@@ -59,6 +59,7 @@ type Action =
   | { type: "SET_LOADING"; payload: boolean }
   | { type: "SET_ERROR"; payload: string }
   | { type: "RESET" }
+  | { type: "RANDOMIZE_GOAL" }
   | { type: "ADD_EVIDENCE"; payload: EvidenceCard[] }
   | { type: "DETECT_CONTRADICTION"; payload: { cardA: string; cardB: string; description: string } }
   | { type: "UPDATE_TRUST"; payload: Partial<TrustState> }
@@ -74,7 +75,8 @@ function createInitialState(): SymbioteStateV2 {
     currentLocation: "着陆点",
     visitedLocations: ["着陆点"],
     trustMeter: 50,
-    symbioteGoal: GOALS[Math.floor(Math.random() * GOALS.length)],
+    // Fixed initial goal for SSR stability — randomized on client mount
+    symbioteGoal: GOALS[0],
     symbioteGoalProgress: 0,
     inventory: ["紧急信标"],
     discoveredClues: [],
@@ -218,8 +220,17 @@ function reducer(state: SymbioteStateV2, action: Action): SymbioteStateV2 {
             : c
         ),
       };
-    case "RESET":
-      return createInitialState();
+    case "RESET": {
+      // RESET only fires on client (user action) — Math.random is safe
+      const newGoal = GOALS[Math.floor(Math.random() * GOALS.length)];
+      const initial = createInitialState();
+      return { ...initial, symbioteGoal: newGoal };
+    }
+    case "RANDOMIZE_GOAL":
+      return {
+        ...state,
+        symbioteGoal: GOALS[Math.floor(Math.random() * GOALS.length)],
+      };
     default:
       return state;
   }
@@ -228,6 +239,13 @@ function reducer(state: SymbioteStateV2, action: Action): SymbioteStateV2 {
 export function useSymbiote() {
   const [state, dispatch] = useReducer(reducer, null, createInitialState);
   const [sceneCache, setSceneCache] = useState<Record<string, SymbioteAIResponse>>({});
+  const abortRef = useRef<AbortController | null>(null);
+  const lastActionRef = useRef<string | null>(null);
+
+  // Randomize symbiote goal on first client mount (SSR-safe)
+  useEffect(() => {
+    dispatch({ type: "RANDOMIZE_GOAL" });
+  }, []);
 
   const sendAction = useCallback(
     async (playerAction: string) => {
@@ -236,6 +254,8 @@ export function useSymbiote() {
 
       // Quick action routing: check if this is a basic local action
       const isLocalAction = LOCAL_ACTIONS.some(a => playerAction.includes(a));
+      // Save for potential retry
+      lastActionRef.current = playerAction;
       // Movement actions: check scene cache for instant navigation
       const cached = MOVE_ACTIONS.some(a => playerAction.includes(a)) ? sceneCache[playerAction] : null;
 
@@ -270,8 +290,14 @@ export function useSymbiote() {
       });
 
       try {
+        // Cancel any in-flight request
+        abortRef.current?.abort();
+        const controller = new AbortController();
+        abortRef.current = controller;
+
         const res = await fetch("/api/symbiote/action", {
           method: "POST",
+          signal: controller.signal,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             gameState: {
@@ -442,6 +468,12 @@ export function useSymbiote() {
     dispatch({ type: "END_CONFRONTATION" });
   }, []);
 
+  const retry = useCallback(() => {
+    if (lastActionRef.current) {
+      sendAction(lastActionRef.current);
+    }
+  }, [sendAction]);
+
   return {
     state,
     sendAction,
@@ -451,7 +483,8 @@ export function useSymbiote() {
     markEvidence,
     startConfrontation,
     endConfrontation,
-    isLoading: (state as SymbioteStateV2 & { isLoading?: boolean }).isLoading || false,
-    error: (state as SymbioteStateV2 & { error?: string }).error || "",
+    retry,
+    isLoading: state.isLoading || false,
+    error: state.error || "",
   };
 }
